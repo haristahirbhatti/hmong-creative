@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -10,10 +9,14 @@
 html { scroll-behavior: auto; }
 
 body {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   background: var(--black);
   color: var(--white);
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'kern' 1;
+  letter-spacing: -0.01em;
 }
 
 @keyframes spulse {
@@ -35,4 +38,22 @@ body {
 
 .ring-pulse {
   animation: ringpulse 3s ease-in-out infinite;
+}
+
+/* Syne font fallback - bold geometric sans for headings */
+.syne, [style*="Syne"] {
+  font-family: 'Syne', 'Futura', 'Century Gothic', 'Trebuchet MS', 'DIN', system-ui, sans-serif !important;
+  font-stretch: normal !important;
+}
+
+/* Prevent any font stretching globally */
+* {
+  font-stretch: normal;
+}
+
+/* Force heading font stack everywhere Syne is used inline */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Syne', 'Futura', 'Century Gothic', 'Trebuchet MS', system-ui, sans-serif;
+  font-stretch: normal;
+  -webkit-font-smoothing: antialiased;
 }
