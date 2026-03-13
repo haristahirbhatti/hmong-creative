@@ -6,14 +6,14 @@ import Link from 'next/link';
 type JobStatus = 'idle' | 'uploading' | 'generating' | 'done' | 'error';
 
 export default function ImageToVideoPage() {
-  const [image, setImage]         = useState<File | null>(null);
-  const [preview, setPreview]     = useState<string>('');
-  const [prompt, setPrompt]       = useState('');
-  const [duration, setDuration]   = useState(4);
-  const [status, setStatus]       = useState<JobStatus>('idle');
-  const [videoUrl, setVideoUrl]   = useState('');
-  const [error, setError]         = useState('');
-  const [progress, setProgress]   = useState(0);
+  const [image, setImage] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string>('');
+  const [prompt, setPrompt] = useState('');
+  const [duration, setDuration] = useState(5);
+  const [status, setStatus] = useState<JobStatus>('idle');
+  const [videoUrl, setVideoUrl] = useState('');
+  const [error, setError] = useState('');
+  const [progress, setProgress] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFile = (file: File) => {
@@ -74,7 +74,7 @@ export default function ImageToVideoPage() {
 
       {/* Main */}
       <div style={{ paddingTop: 120, paddingBottom: 80, maxWidth: 900, margin: '0 auto', padding: '120px 24px 80px' }}>
-        
+
         {/* Header */}
         <div style={{ marginBottom: 48, textAlign: 'center' }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(255,92,43,0.1)', border: '1px solid rgba(255,92,43,0.3)', borderRadius: 100, padding: '6px 16px', marginBottom: 20 }}>
@@ -148,10 +148,10 @@ export default function ImageToVideoPage() {
                 <span>Duration</span>
                 <span style={{ color: '#FF5C2B', fontWeight: 700 }}>{duration}s</span>
               </label>
-              <input type="range" min={4} max={16} step={4} value={duration} onChange={e => setDuration(Number(e.target.value))}
-                style={{ width: '100%', accentColor: '#FF5C2B' }} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#333', fontSize: 11, marginTop: 4 }}>
-                <span>4s</span><span>8s</span><span>12s</span><span>16s</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[5, 8, 10].map(d => (
+                  <button key={d} onClick={() => setDuration(d)} style={{ flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${duration === d ? '#FF5C2B' : 'rgba(255,255,255,0.1)'}`, background: duration === d ? 'rgba(255,92,43,0.12)' : 'transparent', color: duration === d ? '#FF5C2B' : '#555', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{d}s</button>
+                ))}
               </div>
             </div>
 

@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 export default function DashboardPage() {
-  const [user, setUser]     = useState<{email?: string; user_metadata?: {full_name?: string}} | null>(null);
+  const [user, setUser] = useState<{ email?: string; user_metadata?: { full_name?: string } } | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const supabase = createClient();
@@ -21,7 +21,7 @@ export default function DashboardPage() {
       setLoading(false);
     };
     getUser();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleLogout = async () => {
@@ -39,8 +39,8 @@ export default function DashboardPage() {
 
   const tools = [
     { icon: '🎬', label: 'Image to Video', desc: 'Turn any image into a video', href: '/image-to-video', color: '#FFB347', badge: 'Popular' },
-    { icon: '🎵', label: 'Audio AI',        desc: 'Generate music & voiceovers', href: '#', color: '#d4aaff', badge: 'Soon' },
-    { icon: '🖼️', label: 'Create Image',   desc: 'AI image generation',         href: '#', color: '#a8d8ea', badge: 'Soon' },
+    { icon: '🎵', label: 'Audio AI', desc: 'Generate music & voiceovers', href: '/audio', color: '#d4aaff', badge: 'New' },
+    { icon: '🖼️', label: 'Create Image', desc: 'AI image generation', href: '/create-image', color: '#a8d8ea', badge: 'New' },
   ];
 
   return (

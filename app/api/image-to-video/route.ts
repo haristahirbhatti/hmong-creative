@@ -1,43 +1,96 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fal } from '@fal-ai/client';
 
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
-    const image    = formData.get('image') as File;
-    const prompt   = formData.get('prompt') as string || '';
+    const image = formData.get('image') as File;
+    const prompt = formData.get('prompt') as string || '';
     const duration = Number(formData.get('duration')) || 5;
 
     if (!image) return NextResponse.json({ error: 'No image provided' }, { status: 400 });
+    const apiKey = process.env.KIE_API_KEY;
+    if (!apiKey) return NextResponse.json({ error: 'KIE API key not configured' }, { status: 500 });
 
-    const apiKey = process.env.FAL_KEY;
-    if (!apiKey) return NextResponse.json({ error: 'fal.ai API key not configured' }, { status: 500 });
+    // Step 1: Upload image
+    const bytes = await image.arrayBuffer();
+    const base64 = Buffer.from(bytes).toString('base64');
 
-    // Set API key via env (fal reads FAL_KEY automatically)
-    process.env.FAL_KEY = apiKey;
-
-    // Step 1: Upload image to fal storage
-    const imageFile = new File([await image.arrayBuffer()], image.name || 'image.jpg', { type: image.type });
-    const imageUrl  = await fal.storage.upload(imageFile);
-
-    // Step 2: Generate video using Kling v1 Standard
-    const result = await fal.subscribe('fal-ai/kling-video/v1/standard/image-to-video', {
-      input: {
-        image_url:  imageUrl,
-        prompt:     prompt || 'Smooth cinematic motion, natural movement',
-        duration:   duration >= 10 ? '10' : '5',
-        cfg_scale:  0.5,
+    const uploadRes = await fetch('https://kieai.redpandaai.co/api/file-base64-upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({
+        base64Data: `data:${image.type};base64,${base64}`,
+        uploadPath: 'images',
+        fileName: `upload-${Date.now()}.jpg`,
+      }),
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const videoUrl = (result as any).data?.video?.url || (result as any).video?.url;
-    if (!videoUrl) return NextResponse.json({ error: 'No video returned from fal.ai' }, { status: 500 });
+    const uploadData = await uploadRes.json();
+    const imageUrl = uploadData?.data?.downloadUrl || uploadData?.data?.fileUrl || uploadData?.data?.url;
 
-    return NextResponse.json({ videoUrl });
+    if (!imageUrl) {
+      return NextResponse.json({ error: `Upload failed: ${JSON.stringify(uploadData)}` }, { status: 500 });
+    }
+
+    // Step 2: Generate video
+    // Docs: duration (5 or 10), quality ("720p" or "1080p"), aspectRatio ("16:9" or "9:16")
+    // imageUrl is optional reference image field
+    const reqBody = {
+      prompt: prompt || 'Smooth cinematic motion, natural movement',
+      imageUrl,                          // reference image to animate
+      duration: duration >= 10 ? 10 : 5,
+      quality: '720p',
+      aspectRatio: '16:9',
+      waterMark: '',
+    };
+
+    console.log('Generate body:', JSON.stringify({ ...reqBody, imageUrl: '[url]' }));
+
+    const createRes = await fetch('https://api.kie.ai/api/v1/runway/generate', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(reqBody),
+    });
+
+    const createData = await createRes.json();
+    console.log('KIE generate response:', JSON.stringify(createData));
+
+    if (!createRes.ok || createData.code !== 200) {
+      return NextResponse.json({ error: createData.msg || 'Video generation failed' }, { status: 500 });
+    }
+
+    const taskId = createData.data?.taskId;
+    if (!taskId) {
+      return NextResponse.json({ error: `No task ID. Response: ${JSON.stringify(createData)}` }, { status: 500 });
+    }
+
+    // Step 3: Poll for result
+    for (let i = 0; i < 60; i++) {
+      await new Promise(r => setTimeout(r, 5000));
+      const pollRes = await fetch(`https://api.kie.ai/api/v1/runway/record-detail?taskId=${taskId}`, {
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+      });
+      const poll = await pollRes.json();
+      const state = poll.data?.state;
+      const videoUrl = poll.data?.videoInfo?.videoUrl;
+      console.log(`Poll #${i + 1} state: ${state}`);
+
+      if (state === 'success' && videoUrl) return NextResponse.json({ videoUrl });
+      if (state === 'fail' || state === 'error') {
+        return NextResponse.json({ error: poll.data?.failMsg || 'Generation failed' }, { status: 500 });
+      }
+    }
+
+    return NextResponse.json({ error: 'Timeout — try again' }, { status: 408 });
 
   } catch (e: unknown) {
-    console.error('fal.ai error:', e);
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Generation failed' }, { status: 500 });
+    console.error('KIE error:', e);
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Server error' }, { status: 500 });
   }
 }

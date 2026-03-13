@@ -5,9 +5,9 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 
 const FEATURES = [
-  { icon: '🎬', label: 'Image to Video', desc: 'Animate any image with AI',     href: '/image-to-video', badge: 'New' },
-  { icon: '🎵', label: 'Audio AI',        desc: 'Generate music & voiceovers',   href: '#', badge: 'Soon' },
-  { icon: '🖼️', label: 'Create Image',   desc: 'Text to image generation',      href: '#', badge: 'Soon' },
+  { icon: '🎬', label: 'Image to Video', desc: 'Animate any image with AI', href: '/image-to-video', badge: 'New' },
+  // { icon: '🎵', label: 'Audio AI',        desc: 'Generate music & voiceovers',   href: '/audio', badge: 'New' },
+  // { icon: '🖼️', label: 'Create Image',   desc: 'Text to image generation',      href: '/create-image', badge: 'New' },
 ];
 
 export default function Navbar() {
@@ -30,8 +30,8 @@ export default function Navbar() {
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', flexShrink: 0 }}>
           <div style={{ width: 32, height: 32, background: '#080808', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <path d="M9 2a7 7 0 100 14A7 7 0 009 2z" stroke="white" strokeWidth="1.5"/>
-              <path d="M6 9h6M9 6v6" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+              <path d="M9 2a7 7 0 100 14A7 7 0 009 2z" stroke="white" strokeWidth="1.5" />
+              <path d="M6 9h6M9 6v6" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
           </div>
           <span style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 15, color: '#080808' }}>Hmong Creative</span>
@@ -55,7 +55,7 @@ export default function Navbar() {
             }}>
               Features
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ transition: 'transform 0.2s', transform: featOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-                <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
 
@@ -90,7 +90,7 @@ export default function Navbar() {
                       </div>
                       {f.badge !== 'Soon' && (
                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ color: '#ccc', flexShrink: 0 }}>
-                          <path d="M3 7h8M7 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M3 7h8M7 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                       )}
                     </div>
@@ -108,8 +108,8 @@ export default function Navbar() {
           {/* Other links */}
           {[
             { label: 'Discover', href: '#discover' },
-            { label: 'Pricing',  href: '#pricing' },
-            { label: 'Blog',     href: '#blog' },
+            { label: 'Pricing', href: '#pricing' },
+            { label: 'Blog', href: '#blog' },
           ].map(item => (
             <li key={item.label}>
               <Link href={item.href} style={{
