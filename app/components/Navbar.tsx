@@ -7,15 +7,15 @@ import { createClient } from '../../lib/supabase';
 import { useSiteSettings } from '../../lib/useSiteSettings';
 
 export default function Navbar() {
-  const [scrolled, setScrolled]         = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const [featuresOpen, setFeaturesOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [user, setUser]                 = useState<{ email: string; name: string } | null>(null);
+  const [user, setUser] = useState<{ email: string; name: string } | null>(null);
   const featuresRef = useRef<HTMLDivElement>(null);
-  const userRef     = useRef<HTMLDivElement>(null);
-  const router      = useRouter();
-  const pathname    = usePathname();
-  const supabase    = createClient();
+  const userRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const pathname = usePathname();
+  const supabase = createClient();
   const { settings } = useSiteSettings();
 
   useEffect(() => {
@@ -43,13 +43,27 @@ export default function Navbar() {
       }
     };
     loadUser();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') loadUser();
-      if (event === 'SIGNED_IN') loadUser();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  // Auth state listener — only once, not on every pathname change
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: string) => {
+      if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+        const loadUser = async () => {
+          try {
+            const { data: { user: u }, error } = await supabase.auth.getUser();
+            if (error || !u) { setUser(null); return; }
+            const name = u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0] || 'User';
+            setUser({ email: u.email || '', name });
+          } catch { setUser(null); }
+        };
+        loadUser();
+      }
     });
     return () => subscription.unsubscribe();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ← empty deps — subscribe only once
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -79,8 +93,8 @@ export default function Navbar() {
 
   const FEATURES = [
     { icon: '🎬', label: 'Image to Video', desc: 'Animate your images with AI', href: '/image-to-video', enabled: settings.feature_image_to_video, badge: 'New' },
-    { icon: '🎵', label: 'Audio AI',        desc: 'Generate music & voiceovers',  href: '/audio',          enabled: settings.feature_audio_ai,       badge: settings.feature_audio_ai ? 'New' : 'Soon' },
-    { icon: '🖼️', label: 'Create Image',   desc: 'Text to image generation',     href: '/create-image',   enabled: settings.feature_create_image,   badge: settings.feature_create_image ? 'New' : 'Soon' },
+    { icon: '🎵', label: 'Audio AI', desc: 'Generate music & voiceovers', href: '/audio', enabled: settings.feature_audio_ai, badge: settings.feature_audio_ai ? 'New' : 'Soon' },
+    { icon: '🖼️', label: 'Create Image', desc: 'Text to image generation', href: '/create-image', enabled: settings.feature_create_image, badge: settings.feature_create_image ? 'New' : 'Soon' },
   ];
 
   return (

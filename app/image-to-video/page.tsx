@@ -7,24 +7,26 @@ import AuthGuard from '../components/AuthGuard';
 import { createClient } from '../../lib/supabase';
 
 function ImageToVideoContent() {
-  const [image, setImage]       = useState<File | null>(null);
-  const [preview, setPreview]   = useState('');
-  const [prompt, setPrompt]     = useState('');
+  const [image, setImage] = useState<File | null>(null);
+  const [preview, setPreview] = useState('');
+  const [prompt, setPrompt] = useState('');
   const [duration, setDuration] = useState(5);
-  const [status, setStatus]     = useState<'idle'|'generating'|'done'|'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'generating' | 'done' | 'error'>('idle');
   const [videoUrl, setVideoUrl] = useState('');
-  const [error, setError]       = useState('');
+  const [error, setError] = useState('');
   const [progress, setProgress] = useState(0);
-  const [userId, setUserId]     = useState('');
+  const [userId, setUserId] = useState('');
   const [userEmail, setUserEmail] = useState('');
-  const router   = useRouter();
+  const router = useRouter();
   const supabase = createClient();
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) { setUserId(user.id); setUserEmail(user.email || ''); }
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    const load = async () => {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      if (u) { setUserId(u.id); setUserEmail(u.email || ''); }
+    };
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -46,7 +48,7 @@ function ImageToVideoContent() {
       fd.append('userId', userId);
       fd.append('userEmail', userEmail);
 
-      const res  = await fetch('/api/image-to-video', { method: 'POST', body: fd });
+      const res = await fetch('/api/image-to-video', { method: 'POST', body: fd });
       clearInterval(interval);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
