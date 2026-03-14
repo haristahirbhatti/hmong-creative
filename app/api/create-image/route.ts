@@ -11,7 +11,6 @@ export async function POST(req: NextRequest) {
 
     const kiePrompt = style ? `${prompt}, ${style} style` : prompt;
 
-    // Dimensions based on ratio
     const DIMS: Record<string, { w: number; h: number }> = {
       '1:1': { w: 1024, h: 1024 },
       '16:9': { w: 1344, h: 768 },
@@ -21,102 +20,102 @@ export async function POST(req: NextRequest) {
     };
     const { w, h } = DIMS[aspect_ratio || '1:1'] || DIMS['1:1'];
 
-    // kie.ai endpoints to try in order
-    const KIE_ATTEMPTS = [
-      // Stable Diffusion
+    let imageUrl = '';
+
+    // Try kie.ai endpoints
+    const KIE_ENDPOINTS = [
       {
-        generate: {
-          url: 'https://api.kie.ai/api/v1/sd/generate',
-          body: { prompt: kiePrompt, negativePrompt: 'blurry, low quality', width: w, height: h, steps: 20, cfgScale: 7, model: 'sd-xl' },
-        },
-        poll: (id: string) => `https://api.kie.ai/api/v1/sd/record-info?taskId=${id}`,
-        getUrl: (d: Record<string, unknown>) => (d?.response as Record<string, unknown>)?.imageUrl as string || (d?.response as Record<string, unknown>)?.image_url as string,
-      },
-      // MidJourney
-      {
-        generate: {
-          url: 'https://api.kie.ai/api/v1/mj/imagine',
-          body: { prompt: kiePrompt, aspectRatio: aspect_ratio || '1:1' },
-        },
-        poll: (id: string) => `https://api.kie.ai/api/v1/mj/record-info?taskId=${id}`,
-        getUrl: (d: Record<string, unknown>) => (d?.response as Record<string, unknown>)?.imageUrl as string || d?.imageUrl as string,
-      },
-      // DALL-E style
-      {
-        generate: {
-          url: 'https://api.kie.ai/api/v1/dalle/generate',
-          body: { prompt: kiePrompt, size: `${w}x${h}`, quality: 'standard' },
-        },
-        poll: (id: string) => `https://api.kie.ai/api/v1/dalle/record-info?taskId=${id}`,
-        getUrl: (d: Record<string, unknown>) => (d?.response as Record<string, unknown>)?.imageUrl as string || d?.imageUrl as string,
-      },
-      // Flux standard (non-kontext)
-      {
-        generate: {
-          url: 'https://api.kie.ai/api/v1/flux/generate',
-          body: { prompt: kiePrompt, aspectRatio: aspect_ratio || '1:1', outputFormat: 'jpeg', model: 'flux-dev' },
-        },
+        url: 'https://api.kie.ai/api/v1/flux/kontext/generate',
+        body: { prompt: kiePrompt, enableTranslation: true, aspectRatio: aspect_ratio || '1:1', outputFormat: 'jpeg', promptUpsampling: false, model: 'flux-kontext-pro', safetyTolerance: 2 },
         poll: (id: string) => `https://api.kie.ai/api/v1/flux/record-info?taskId=${id}`,
-        getUrl: (d: Record<string, unknown>) => (d?.response as Record<string, unknown>)?.imageUrl as string || d?.imageUrl as string,
+        getUrl: (d: Record<string, unknown>) => {
+          const r = d?.response as Record<string, unknown>;
+          return (r?.imageUrl || r?.image_url || d?.imageUrl) as string;
+        },
+      },
+      {
+        url: 'https://api.kie.ai/api/v1/flux/generate',
+        body: { prompt: kiePrompt, aspectRatio: aspect_ratio || '1:1', outputFormat: 'jpeg', model: 'flux-dev' },
+        poll: (id: string) => `https://api.kie.ai/api/v1/flux/record-info?taskId=${id}`,
+        getUrl: (d: Record<string, unknown>) => {
+          const r = d?.response as Record<string, unknown>;
+          return (r?.imageUrl || r?.image_url || d?.imageUrl) as string;
+        },
+      },
+      {
+        url: 'https://api.kie.ai/api/v1/sd/generate',
+        body: { prompt: kiePrompt, negativePrompt: 'blurry, low quality, ugly', width: w, height: h, steps: 25, cfgScale: 7 },
+        poll: (id: string) => `https://api.kie.ai/api/v1/sd/record-info?taskId=${id}`,
+        getUrl: (d: Record<string, unknown>) => {
+          const r = d?.response as Record<string, unknown>;
+          return (r?.imageUrl || r?.image_url || d?.imageUrl) as string;
+        },
       },
     ];
 
-    let imageUrl = '';
-    let usedEndpoint = '';
-
-    for (const attempt of KIE_ATTEMPTS) {
+    for (const ep of KIE_ENDPOINTS) {
       try {
-        console.log('Trying:', attempt.generate.url);
-        const res = await fetch(attempt.generate.url, {
+        console.log('Trying:', ep.url);
+        const res = await fetch(ep.url, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify(attempt.generate.body),
+          body: JSON.stringify(ep.body),
           signal: AbortSignal.timeout(10000),
         });
         const data = await res.json();
-        console.log(`${attempt.generate.url} -> code:${data.code} msg:${data.msg}`);
+        console.log(`Response code:${data.code} msg:${data.msg}`);
 
         if (data.code === 200 && data.data?.taskId) {
           const taskId = data.data.taskId;
-          usedEndpoint = attempt.generate.url;
-          console.log('Got taskId:', taskId, 'from', usedEndpoint);
-
-          // Poll
           for (let i = 0; i < 30; i++) {
             await new Promise(r => setTimeout(r, 3000));
-            const poll = await (await fetch(
-              attempt.poll(taskId),
-              { headers: { 'Authorization': `Bearer ${apiKey}` }, signal: AbortSignal.timeout(8000) }
-            )).json();
-
+            const poll = await (await fetch(ep.poll(taskId), {
+              headers: { 'Authorization': `Bearer ${apiKey}` },
+              signal: AbortSignal.timeout(8000),
+            })).json();
             const d = poll?.data || {};
             const state = d?.status || d?.state;
-            const url = attempt.getUrl(d)
-              || d?.response?.imageUrl
-              || d?.imageUrl
-              || d?.image_url;
-
-            console.log(`Poll #${i + 1} [${usedEndpoint.split('/').pop()}] state:${state} url:${url ? 'FOUND' : 'none'}`);
-
+            const url = ep.getUrl(d);
+            console.log(`Poll #${i + 1} state:${state} url:${url ? 'FOUND' : 'none'}`);
             if (url) { imageUrl = url; break; }
             if (state === 'FAILED' || state === 'ERROR' || state === 'fail' || state === 'error') break;
           }
           if (imageUrl) break;
         }
       } catch (e) {
-        console.log(`${attempt.generate.url} failed:`, e instanceof Error ? e.message.slice(0, 80) : e);
+        console.log(`${ep.url} failed:`, e instanceof Error ? e.message.slice(0, 60) : e);
       }
     }
 
-    // Final fallback — Pollinations (always works, free, no key)
+    // Fallback: Pollinations — fetch image bytes and return as base64
+    // This avoids CORS/display issues with direct Pollinations URLs
     if (!imageUrl) {
-      console.log('All kie.ai endpoints failed, using Pollinations fallback');
+      console.log('Using Pollinations fallback...');
       const seed = Math.floor(Math.random() * 999999);
-      imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(kiePrompt)}?width=${w}&height=${h}&seed=${seed}&model=flux&nologo=true&enhance=true`;
+      const polUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(kiePrompt)}?width=${w}&height=${h}&seed=${seed}&model=flux&nologo=true&enhance=true`;
+
+      try {
+        const imgRes = await fetch(polUrl, { signal: AbortSignal.timeout(60000) });
+        if (imgRes.ok) {
+          const buffer = await imgRes.arrayBuffer();
+          const base64 = Buffer.from(buffer).toString('base64');
+          const mime = imgRes.headers.get('content-type') || 'image/jpeg';
+          imageUrl = `data:${mime};base64,${base64}`;
+          console.log('Pollinations image fetched, size:', buffer.byteLength);
+        }
+      } catch (e) {
+        console.log('Pollinations fetch failed:', e instanceof Error ? e.message : e);
+        // Last resort: return URL directly
+        imageUrl = polUrl;
+      }
     }
 
-    // Save to Supabase
-    if (userId) {
+    if (!imageUrl) {
+      return NextResponse.json({ error: 'Image generation failed — please try again' }, { status: 500 });
+    }
+
+    // Save to Supabase (skip base64 URLs, too large)
+    if (userId && !imageUrl.startsWith('data:')) {
       try {
         const supabase = createClient(
           process.env.NEXT_PUBLIC_SUPABASE_URL!,

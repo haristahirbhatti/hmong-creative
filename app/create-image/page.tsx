@@ -236,7 +236,9 @@ function CreateImageContent() {
             {imageUrl ? (
               <>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imageUrl} alt="Generated" style={{ width: '100%', maxWidth: 480, borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.5)', marginBottom: 16 }} />
+                <img src={imageUrl} alt="Generated"
+                  style={{ width: '100%', maxWidth: 480, borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.5)', marginBottom: 16 }}
+                />
                 <a href={imageUrl} download="hmong-creative-image.jpg"
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', maxWidth: 480, padding: '13px', borderRadius: 14, border: '1.5px solid #FF5C2B', color: '#FF5C2B', textDecoration: 'none', fontSize: 14, fontWeight: 700 }}>
                   ⬇ Download Image
