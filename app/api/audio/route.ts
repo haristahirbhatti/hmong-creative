@@ -65,15 +65,24 @@ export async function POST(req: NextRequest) {
 
       const data = poll?.data;
       const state = data?.status || data?.state;
-      const sunoList = data?.response?.sunoData || data?.sunoData || [];
-      const audioUrl = sunoList?.[0]?.audioUrl
-        || sunoList?.[0]?.audio_url
-        || sunoList?.[0]?.url
-        || data?.audioUrl;
+      const sunoList: { audioUrl?: string; audio_url?: string; url?: string }[] =
+        data?.response?.sunoData || data?.sunoData || [];
 
-      console.log(`Poll #${i + 1} state:${state} audio:${audioUrl ? 'FOUND' : 'none'}`);
+      // Helper: extract a valid audio URL from a single suno item
+      const getUrl = (item: { audioUrl?: string; audio_url?: string; url?: string }) =>
+        item?.audioUrl || item?.audio_url || item?.url || '';
 
-      if (audioUrl) {
+      const validClips = sunoList.filter(s => getUrl(s));
+      const firstUrl = validClips[0] ? getUrl(validClips[0]) : (data?.audioUrl || '');
+
+      console.log(`Poll #${i + 1} state:${state} clips_ready:${validClips.length}`);
+
+      // ── Wait for BOTH clips before returning ──────────────────────────────
+      // Return when we have 2 valid clips, OR after poll 28 if we have at least 1
+      const bothReady = validClips.length >= 2;
+      const partialOk = validClips.length >= 1 && i >= 28;
+
+      if ((bothReady || partialOk) && firstUrl) {
         // Save to Supabase
         if (userId) {
           try {
@@ -86,13 +95,18 @@ export async function POST(req: NextRequest) {
               email: userEmail,
               type: 'audio',
               prompt: title || String(prompt).slice(0, 100),
-              result_url: audioUrl,
+              result_url: firstUrl,
             });
             const { data: profile } = await supabase.from('profiles').select('audio_generated').eq('id', userId).single();
             await supabase.from('profiles').update({ audio_generated: (profile?.audio_generated || 0) + 1 }).eq('id', userId);
           } catch (dbErr) { console.error('DB save error:', dbErr); }
         }
-        return NextResponse.json({ audioUrl, clips: sunoList });
+        // Return both clips + taskId + per-clip audioId for downstream features
+        const enrichedClips = validClips.map(c => ({
+          ...c,
+          audioId: (c as Record<string, unknown>).id as string || (c as Record<string, unknown>).audioId as string || '',
+        }));
+        return NextResponse.json({ audioUrl: firstUrl, clips: enrichedClips, taskId });
       }
 
       if (state === 'FAILED' || state === 'ERROR' || state === 'fail' || state === 'error') {
