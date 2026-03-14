@@ -12,34 +12,34 @@ type Generation = { id: string; user_id: string; type: string; prompt: string; r
 type Tab = 'overview' | 'users' | 'history' | 'settings';
 
 const SIDEBAR = [
-  { id: 'overview' as Tab, icon: '📊', label: 'Overview'    },
-  { id: 'users'    as Tab, icon: '👥', label: 'Users'       },
-  { id: 'history'  as Tab, icon: '🎬', label: 'Gen History' },
-  { id: 'settings' as Tab, icon: '⚙️', label: 'Settings'    },
+  { id: 'overview' as Tab, icon: '📊', label: 'Overview' },
+  { id: 'users' as Tab, icon: '👥', label: 'Users' },
+  { id: 'history' as Tab, icon: '🎬', label: 'Gen History' },
+  { id: 'settings' as Tab, icon: '⚙️', label: 'Settings' },
 ];
 
 export default function AdminPage() {
-  const [users, setUsers]               = useState<User[]>([]);
-  const [generations, setGenerations]   = useState<Generation[]>([]);
-  const [loading, setLoading]           = useState(true);
-  const [authChecked, setAuthChecked]   = useState(false);
-  const [tab, setTab]                   = useState<Tab>('overview');
-  const [sidebarOpen, setSidebarOpen]   = useState(false);
-  const [searchUser, setSearchUser]     = useState('');
-  const [filterType, setFilterType]     = useState<'all'|'video'|'image'|'audio'>('all');
-  const [isMobile, setIsMobile]         = useState(false);
-  const [banLoading, setBanLoading]     = useState<string|null>(null);
-  const [deleteLoading, setDeleteLoading] = useState<string|null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [generations, setGenerations] = useState<Generation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [tab, setTab] = useState<Tab>('overview');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [searchUser, setSearchUser] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'video' | 'image' | 'audio'>('all');
+  const [isMobile, setIsMobile] = useState(false);
+  const [banLoading, setBanLoading] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
-  const [saveMsg, setSaveMsg]           = useState('');
+  const [saveMsg, setSaveMsg] = useState('');
 
   // Settings state
-  const [siteName, setSiteName]         = useState('Hmong Creative');
-  const [siteTagline, setSiteTagline]   = useState('AI Creative Studio');
-  const [maintenance, setMaintenance]   = useState(false);
-  const [flags, setFlags]               = useState({ imageToVideo: true, audioAI: false, createImage: false });
+  const [siteName, setSiteName] = useState('Hmong Creative');
+  const [siteTagline, setSiteTagline] = useState('AI Creative Studio');
+  const [maintenance, setMaintenance] = useState(false);
+  const [flags, setFlags] = useState({ imageToVideo: true, audioAI: false, createImage: false });
 
-  const router   = useRouter();
+  const router = useRouter();
   const supabase = createClient();
 
   useEffect(() => {
@@ -67,33 +67,33 @@ export default function AdminPage() {
         // Load site settings
         const { data: sett } = await supabase.from('site_settings').select('key, value');
         if (sett) {
-          const map: Record<string,string> = {};
-          sett.forEach(r => { map[r.key] = r.value; });
+          const map: Record<string, string> = {};
+          sett.forEach((r: { key: string; value: string }) => { map[r.key] = r.value; });
           setSiteName(map.site_name || 'Hmong Creative');
           setSiteTagline(map.site_tagline || 'AI Creative Studio');
           setMaintenance(map.maintenance_mode === 'true');
           setFlags({
             imageToVideo: map.feature_image_to_video !== 'false',
-            audioAI:      map.feature_audio_ai === 'true',
-            createImage:  map.feature_create_image === 'true',
+            audioAI: map.feature_audio_ai === 'true',
+            createImage: map.feature_create_image === 'true',
           });
         }
-      } catch(e) { console.error(e); router.push('/admin/login'); }
+      } catch (e) { console.error(e); router.push('/admin/login'); }
       finally { setLoading(false); }
     };
     load();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const saveSettings = async () => {
     setSavingSettings(true); setSaveMsg('');
     const updates = [
-      { key: 'site_name',              value: siteName },
-      { key: 'site_tagline',           value: siteTagline },
-      { key: 'maintenance_mode',       value: String(maintenance) },
+      { key: 'site_name', value: siteName },
+      { key: 'site_tagline', value: siteTagline },
+      { key: 'maintenance_mode', value: String(maintenance) },
       { key: 'feature_image_to_video', value: String(flags.imageToVideo) },
-      { key: 'feature_audio_ai',       value: String(flags.audioAI) },
-      { key: 'feature_create_image',   value: String(flags.createImage) },
+      { key: 'feature_audio_ai', value: String(flags.audioAI) },
+      { key: 'feature_create_image', value: String(flags.createImage) },
     ];
     for (const u of updates) {
       await supabase.from('site_settings').upsert({ key: u.key, value: u.value, updated_at: new Date().toISOString() });
@@ -120,10 +120,10 @@ export default function AdminPage() {
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/'); };
   const switchTab = (t: Tab) => { setTab(t); setSidebarOpen(false); };
 
-  const totalContent  = users.reduce((a,u) => a+(u.videos_generated||0)+(u.images_generated||0)+(u.audio_generated||0), 0);
-  const activeUsers   = users.filter(u => u.last_seen && new Date(u.last_seen) > new Date(Date.now()-7*24*60*60*1000)).length;
+  const totalContent = users.reduce((a, u) => a + (u.videos_generated || 0) + (u.images_generated || 0) + (u.audio_generated || 0), 0);
+  const activeUsers = users.filter(u => u.last_seen && new Date(u.last_seen) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length;
   const filteredUsers = users.filter(u => u.email?.toLowerCase().includes(searchUser.toLowerCase()));
-  const filteredGens  = generations.filter(g => filterType === 'all' || g.type === filterType);
+  const filteredGens = generations.filter(g => filterType === 'all' || g.type === filterType);
 
   if (loading) return (
     <div style={{ minHeight: '100vh', background: '#080808', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'DM Sans',sans-serif", color: '#444' }}>
@@ -185,10 +185,10 @@ export default function AdminPage() {
           <>
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
               {[
-                { label: 'Total Users',   value: users.length,  icon: '👥', color: '#a8d8ea' },
-                { label: 'Active (7d)',   value: activeUsers,   icon: '⚡', color: '#d4aaff' },
-                { label: 'Banned',        value: users.filter(u=>u.is_banned).length, icon: '🚫', color: '#ff6666' },
-                { label: 'Total Content', value: totalContent,  icon: '✨', color: '#FFB347' },
+                { label: 'Total Users', value: users.length, icon: '👥', color: '#a8d8ea' },
+                { label: 'Active (7d)', value: activeUsers, icon: '⚡', color: '#d4aaff' },
+                { label: 'Banned', value: users.filter(u => u.is_banned).length, icon: '🚫', color: '#ff6666' },
+                { label: 'Total Content', value: totalContent, icon: '✨', color: '#FFB347' },
               ].map(s => (
                 <div key={s.label} style={{ background: '#111', borderRadius: 14, padding: '18px 16px', border: '1px solid rgba(255,255,255,0.05)' }}>
                   <div style={{ fontSize: 20, marginBottom: 8 }}>{s.icon}</div>
@@ -200,9 +200,9 @@ export default function AdminPage() {
 
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3,1fr)', gap: 12, marginBottom: 20 }}>
               {[
-                { label: 'Videos', value: users.reduce((a,u)=>a+(u.videos_generated||0),0), icon:'🎬', color:'#FFB347' },
-                { label: 'Images', value: users.reduce((a,u)=>a+(u.images_generated||0),0), icon:'🖼️', color:'#a8d8ea' },
-                { label: 'Audio',  value: users.reduce((a,u)=>a+(u.audio_generated||0),0),  icon:'🎵', color:'#d4aaff' },
+                { label: 'Videos', value: users.reduce((a, u) => a + (u.videos_generated || 0), 0), icon: '🎬', color: '#FFB347' },
+                { label: 'Images', value: users.reduce((a, u) => a + (u.images_generated || 0), 0), icon: '🖼️', color: '#a8d8ea' },
+                { label: 'Audio', value: users.reduce((a, u) => a + (u.audio_generated || 0), 0), icon: '🎵', color: '#d4aaff' },
               ].map(s => (
                 <div key={s.label} style={{ background: '#111', borderRadius: 14, padding: '16px 20px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: 14 }}>
                   <div style={{ width: 44, height: 44, background: 'rgba(255,255,255,0.04)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{s.icon}</div>
@@ -222,10 +222,10 @@ export default function AdminPage() {
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 400 }}>
                   <thead><tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    {['Email','Role','Content','Joined'].map(h => <th key={h} style={{ padding: '10px 16px', textAlign: 'left', color: '#333', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>)}
+                    {['Email', 'Role', 'Content', 'Joined'].map(h => <th key={h} style={{ padding: '10px 16px', textAlign: 'left', color: '#333', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>)}
                   </tr></thead>
                   <tbody>
-                    {users.slice(0,6).map(u => (
+                    {users.slice(0, 6).map(u => (
                       <tr key={u.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
                         <td style={{ padding: '11px 16px', fontSize: 13 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -233,8 +233,8 @@ export default function AdminPage() {
                             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: isMobile ? 110 : 200 }}>{u.email}</span>
                           </div>
                         </td>
-                        <td style={{ padding: '11px 16px' }}><span style={{ padding: '3px 8px', borderRadius: 20, background: u.role==='admin'?'rgba(255,92,43,0.2)':'rgba(255,255,255,0.05)', color: u.role==='admin'?'#FF5C2B':'#555', fontSize: 10, fontWeight: 700 }}>{u.role||'user'}</span></td>
-                        <td style={{ padding: '11px 16px', color: '#FFB347', fontWeight: 700, fontSize: 13 }}>{(u.videos_generated||0)+(u.images_generated||0)+(u.audio_generated||0)}</td>
+                        <td style={{ padding: '11px 16px' }}><span style={{ padding: '3px 8px', borderRadius: 20, background: u.role === 'admin' ? 'rgba(255,92,43,0.2)' : 'rgba(255,255,255,0.05)', color: u.role === 'admin' ? '#FF5C2B' : '#555', fontSize: 10, fontWeight: 700 }}>{u.role || 'user'}</span></td>
+                        <td style={{ padding: '11px 16px', color: '#FFB347', fontWeight: 700, fontSize: 13 }}>{(u.videos_generated || 0) + (u.images_generated || 0) + (u.audio_generated || 0)}</td>
                         <td style={{ padding: '11px 16px', color: '#444', fontSize: 12, whiteSpace: 'nowrap' }}>{new Date(u.created_at).toLocaleDateString()}</td>
                       </tr>
                     ))}
@@ -251,7 +251,7 @@ export default function AdminPage() {
           <>
             <input type="text" value={searchUser} onChange={e => setSearchUser(e.target.value)} placeholder="🔍  Search by email..."
               style={{ width: '100%', maxWidth: 380, padding: '10px 14px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.08)', background: '#111', color: 'white', fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 18 }}
-              onFocus={e => (e.target.style.borderColor='#FF5C2B')} onBlur={e => (e.target.style.borderColor='rgba(255,255,255,0.08)')}
+              onFocus={e => (e.target.style.borderColor = '#FF5C2B')} onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.08)')}
             />
             <div style={{ background: '#111', borderRadius: 14, border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
               <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between' }}>
@@ -261,37 +261,37 @@ export default function AdminPage() {
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 540 }}>
                   <thead><tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    {['User','Role','🎬','🖼️','🎵','Joined','Action'].map(h => <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: '#333', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>)}
+                    {['User', 'Role', '🎬', '🖼️', '🎵', 'Joined', 'Action'].map(h => <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: '#333', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>)}
                   </tr></thead>
                   <tbody>
                     {filteredUsers.map(u => (
                       <tr key={u.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}
-                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background='rgba(255,255,255,0.02)')}
-                        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background='transparent')}
+                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)')}
+                        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'transparent')}
                       >
                         <td style={{ padding: '11px 14px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ width: 28, height: 28, borderRadius: 50, background: u.is_banned?'rgba(255,68,68,0.15)':'#1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: u.is_banned?'#ff4444':'#555', flexShrink: 0 }}>{u.email?.[0]?.toUpperCase()}</div>
+                            <div style={{ width: 28, height: 28, borderRadius: 50, background: u.is_banned ? 'rgba(255,68,68,0.15)' : '#1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: u.is_banned ? '#ff4444' : '#555', flexShrink: 0 }}>{u.email?.[0]?.toUpperCase()}</div>
                             <div style={{ minWidth: 0 }}>
-                              <div style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: isMobile?90:160, color: u.is_banned?'#ff4444':'white' }}>{u.email}</div>
+                              <div style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: isMobile ? 90 : 160, color: u.is_banned ? '#ff4444' : 'white' }}>{u.email}</div>
                               {u.is_banned && <div style={{ fontSize: 10, color: '#ff4444' }}>BANNED</div>}
                             </div>
                           </div>
                         </td>
-                        <td style={{ padding: '11px 14px' }}><span style={{ padding: '3px 8px', borderRadius: 20, background: u.role==='admin'?'rgba(255,92,43,0.2)':'rgba(255,255,255,0.05)', color: u.role==='admin'?'#FF5C2B':'#555', fontSize: 10, fontWeight: 700 }}>{u.role||'user'}</span></td>
-                        <td style={{ padding: '11px 14px', color: '#FFB347', fontWeight: 700, fontSize: 12 }}>{u.videos_generated||0}</td>
-                        <td style={{ padding: '11px 14px', color: '#a8d8ea', fontWeight: 700, fontSize: 12 }}>{u.images_generated||0}</td>
-                        <td style={{ padding: '11px 14px', color: '#d4aaff', fontWeight: 700, fontSize: 12 }}>{u.audio_generated||0}</td>
+                        <td style={{ padding: '11px 14px' }}><span style={{ padding: '3px 8px', borderRadius: 20, background: u.role === 'admin' ? 'rgba(255,92,43,0.2)' : 'rgba(255,255,255,0.05)', color: u.role === 'admin' ? '#FF5C2B' : '#555', fontSize: 10, fontWeight: 700 }}>{u.role || 'user'}</span></td>
+                        <td style={{ padding: '11px 14px', color: '#FFB347', fontWeight: 700, fontSize: 12 }}>{u.videos_generated || 0}</td>
+                        <td style={{ padding: '11px 14px', color: '#a8d8ea', fontWeight: 700, fontSize: 12 }}>{u.images_generated || 0}</td>
+                        <td style={{ padding: '11px 14px', color: '#d4aaff', fontWeight: 700, fontSize: 12 }}>{u.audio_generated || 0}</td>
                         <td style={{ padding: '11px 14px', color: '#444', fontSize: 11, whiteSpace: 'nowrap' }}>{new Date(u.created_at).toLocaleDateString()}</td>
                         <td style={{ padding: '11px 14px' }}>
-                          <button onClick={() => handleBan(u.id, u.is_banned)} disabled={banLoading===u.id}
-                            style={{ padding: '5px 11px', borderRadius: 8, border: `1px solid ${u.is_banned?'rgba(100,200,100,0.3)':'rgba(255,68,68,0.3)'}`, background: 'transparent', color: u.is_banned?'#80cc80':'#ff6666', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', opacity: banLoading===u.id?0.5:1 }}>
-                            {banLoading===u.id?'...':u.is_banned?'Unban':'Ban'}
+                          <button onClick={() => handleBan(u.id, u.is_banned)} disabled={banLoading === u.id}
+                            style={{ padding: '5px 11px', borderRadius: 8, border: `1px solid ${u.is_banned ? 'rgba(100,200,100,0.3)' : 'rgba(255,68,68,0.3)'}`, background: 'transparent', color: u.is_banned ? '#80cc80' : '#ff6666', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', opacity: banLoading === u.id ? 0.5 : 1 }}>
+                            {banLoading === u.id ? '...' : u.is_banned ? 'Unban' : 'Ban'}
                           </button>
                         </td>
                       </tr>
                     ))}
-                    {filteredUsers.length===0 && <tr><td colSpan={7} style={{ padding:'40px', textAlign:'center', color:'#2a2a2a' }}>No users found</td></tr>}
+                    {filteredUsers.length === 0 && <tr><td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#2a2a2a' }}>No users found</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -303,10 +303,10 @@ export default function AdminPage() {
         {tab === 'history' && (
           <>
             <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
-              {(['all','video','image','audio'] as const).map(f => (
+              {(['all', 'video', 'image', 'audio'] as const).map(f => (
                 <button key={f} onClick={() => setFilterType(f)}
-                  style={{ padding: '7px 16px', borderRadius: 100, border: `1px solid ${filterType===f?'#FF5C2B':'rgba(255,255,255,0.08)'}`, background: filterType===f?'rgba(255,92,43,0.12)':'transparent', color: filterType===f?'#FF5C2B':'#555', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-                  {f==='all'?'✨ All':f==='video'?'🎬 Videos':f==='image'?'🖼️ Images':'🎵 Audio'}
+                  style={{ padding: '7px 16px', borderRadius: 100, border: `1px solid ${filterType === f ? '#FF5C2B' : 'rgba(255,255,255,0.08)'}`, background: filterType === f ? 'rgba(255,92,43,0.12)' : 'transparent', color: filterType === f ? '#FF5C2B' : '#555', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  {f === 'all' ? '✨ All' : f === 'video' ? '🎬 Videos' : f === 'image' ? '🖼️ Images' : '🎵 Audio'}
                 </button>
               ))}
               <span style={{ marginLeft: 'auto', color: '#333', fontSize: 13, alignSelf: 'center' }}>{filteredGens.length} items</span>
@@ -315,34 +315,34 @@ export default function AdminPage() {
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
                   <thead><tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    {['Type','Prompt','User','Date','Actions'].map(h => <th key={h} style={{ padding: '10px 16px', textAlign: 'left', color: '#333', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>)}
+                    {['Type', 'Prompt', 'User', 'Date', 'Actions'].map(h => <th key={h} style={{ padding: '10px 16px', textAlign: 'left', color: '#333', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>{h}</th>)}
                   </tr></thead>
                   <tbody>
                     {filteredGens.map(g => (
                       <tr key={g.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}
-                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background='rgba(255,255,255,0.02)')}
-                        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background='transparent')}
+                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)')}
+                        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'transparent')}
                       >
                         <td style={{ padding: '11px 16px' }}>
-                          <span style={{ padding: '3px 9px', borderRadius: 8, fontSize: 11, fontWeight: 700, background: g.type==='video'?'rgba(255,179,71,0.15)':g.type==='image'?'rgba(168,216,234,0.15)':'rgba(212,170,255,0.15)', color: g.type==='video'?'#FFB347':g.type==='image'?'#a8d8ea':'#d4aaff', whiteSpace: 'nowrap' }}>
-                            {g.type==='video'?'🎬':g.type==='image'?'🖼️':'🎵'} {g.type}
+                          <span style={{ padding: '3px 9px', borderRadius: 8, fontSize: 11, fontWeight: 700, background: g.type === 'video' ? 'rgba(255,179,71,0.15)' : g.type === 'image' ? 'rgba(168,216,234,0.15)' : 'rgba(212,170,255,0.15)', color: g.type === 'video' ? '#FFB347' : g.type === 'image' ? '#a8d8ea' : '#d4aaff', whiteSpace: 'nowrap' }}>
+                            {g.type === 'video' ? '🎬' : g.type === 'image' ? '🖼️' : '🎵'} {g.type}
                           </span>
                         </td>
-                        <td style={{ padding: '11px 16px', fontSize: 12, color: '#888', maxWidth: 200 }}><div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.prompt||'—'}</div></td>
-                        <td style={{ padding: '11px 16px', fontSize: 11, color: '#555', maxWidth: 120 }}><div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.email||g.user_id?.slice(0,8)+'...'}</div></td>
+                        <td style={{ padding: '11px 16px', fontSize: 12, color: '#888', maxWidth: 200 }}><div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.prompt || '—'}</div></td>
+                        <td style={{ padding: '11px 16px', fontSize: 11, color: '#555', maxWidth: 120 }}><div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.email || g.user_id?.slice(0, 8) + '...'}</div></td>
                         <td style={{ padding: '11px 16px', fontSize: 11, color: '#444', whiteSpace: 'nowrap' }}>{new Date(g.created_at).toLocaleDateString()}</td>
                         <td style={{ padding: '11px 16px' }}>
                           <div style={{ display: 'flex', gap: 6 }}>
                             {g.result_url && <a href={g.result_url} target="_blank" rel="noreferrer" style={{ padding: '4px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)', color: '#555', fontSize: 11, textDecoration: 'none' }}>View</a>}
-                            <button onClick={() => handleDeleteGen(g.id)} disabled={deleteLoading===g.id}
-                              style={{ padding: '4px 10px', borderRadius: 8, border: '1px solid rgba(255,68,68,0.2)', background: 'transparent', color: '#ff6666', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', opacity: deleteLoading===g.id?0.5:1 }}>
-                              {deleteLoading===g.id?'...':'Delete'}
+                            <button onClick={() => handleDeleteGen(g.id)} disabled={deleteLoading === g.id}
+                              style={{ padding: '4px 10px', borderRadius: 8, border: '1px solid rgba(255,68,68,0.2)', background: 'transparent', color: '#ff6666', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', opacity: deleteLoading === g.id ? 0.5 : 1 }}>
+                              {deleteLoading === g.id ? '...' : 'Delete'}
                             </button>
                           </div>
                         </td>
                       </tr>
                     ))}
-                    {filteredGens.length===0 && <tr><td colSpan={5} style={{ padding:'40px', textAlign:'center', color:'#2a2a2a' }}>No generations yet</td></tr>}
+                    {filteredGens.length === 0 && <tr><td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: '#2a2a2a' }}>No generations yet</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -361,14 +361,14 @@ export default function AdminPage() {
                 <label style={{ display: 'block', color: '#555', fontSize: 12, marginBottom: 8 }}>Site Name</label>
                 <input value={siteName} onChange={e => setSiteName(e.target.value)}
                   style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)', background: '#1a1a1a', color: 'white', fontSize: 14, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
-                  onFocus={e => (e.target.style.borderColor='#FF5C2B')} onBlur={e => (e.target.style.borderColor='rgba(255,255,255,0.08)')}
+                  onFocus={e => (e.target.style.borderColor = '#FF5C2B')} onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.08)')}
                 />
               </div>
               <div>
                 <label style={{ display: 'block', color: '#555', fontSize: 12, marginBottom: 8 }}>Tagline</label>
                 <input value={siteTagline} onChange={e => setSiteTagline(e.target.value)}
                   style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)', background: '#1a1a1a', color: 'white', fontSize: 14, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
-                  onFocus={e => (e.target.style.borderColor='#FF5C2B')} onBlur={e => (e.target.style.borderColor='rgba(255,255,255,0.08)')}
+                  onFocus={e => (e.target.style.borderColor = '#FF5C2B')} onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.08)')}
                 />
               </div>
             </div>
@@ -381,8 +381,8 @@ export default function AdminPage() {
                   <p style={{ color: '#444', fontSize: 13, margin: 0 }}>Shows maintenance page to all users</p>
                 </div>
                 <button onClick={() => setMaintenance(!maintenance)}
-                  style={{ width: 52, height: 28, borderRadius: 100, border: 'none', background: maintenance?'#FF5C2B':'#222', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
-                  <div style={{ width: 20, height: 20, borderRadius: 50, background: 'white', position: 'absolute', top: 4, left: maintenance?28:4, transition: 'left 0.2s' }} />
+                  style={{ width: 52, height: 28, borderRadius: 100, border: 'none', background: maintenance ? '#FF5C2B' : '#222', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                  <div style={{ width: 20, height: 20, borderRadius: 50, background: 'white', position: 'absolute', top: 4, left: maintenance ? 28 : 4, transition: 'left 0.2s' }} />
                 </button>
               </div>
               {maintenance && <div style={{ background: 'rgba(255,92,43,0.08)', border: '1px solid rgba(255,92,43,0.2)', borderRadius: 10, padding: '10px 14px', marginTop: 14 }}><p style={{ color: '#FF5C2B', fontSize: 13, margin: 0 }}>⚠️ Site is in maintenance mode</p></div>}
@@ -394,8 +394,8 @@ export default function AdminPage() {
               <p style={{ color: '#444', fontSize: 13, margin: '0 0 16px' }}>Enable/disable features on the live site instantly</p>
               {[
                 { key: 'imageToVideo' as const, label: '🎬 Image to Video', desc: 'Allow users to generate videos' },
-                { key: 'audioAI'      as const, label: '🎵 Audio AI',       desc: 'Allow users to generate music' },
-                { key: 'createImage'  as const, label: '🖼️ Create Image',   desc: 'Allow users to generate images' },
+                { key: 'audioAI' as const, label: '🎵 Audio AI', desc: 'Allow users to generate music' },
+                { key: 'createImage' as const, label: '🖼️ Create Image', desc: 'Allow users to generate images' },
               ].map(f => (
                 <div key={f.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                   <div style={{ paddingRight: 16 }}>
@@ -403,8 +403,8 @@ export default function AdminPage() {
                     <div style={{ fontSize: 12, color: '#444' }}>{f.desc}</div>
                   </div>
                   <button onClick={() => setFlags(prev => ({ ...prev, [f.key]: !prev[f.key] }))}
-                    style={{ width: 52, height: 28, borderRadius: 100, border: 'none', background: flags[f.key]?'#FF5C2B':'#222', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
-                    <div style={{ width: 20, height: 20, borderRadius: 50, background: 'white', position: 'absolute', top: 4, left: flags[f.key]?28:4, transition: 'left 0.2s' }} />
+                    style={{ width: 52, height: 28, borderRadius: 100, border: 'none', background: flags[f.key] ? '#FF5C2B' : '#222', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                    <div style={{ width: 20, height: 20, borderRadius: 50, background: 'white', position: 'absolute', top: 4, left: flags[f.key] ? 28 : 4, transition: 'left 0.2s' }} />
                   </button>
                 </div>
               ))}
@@ -413,14 +413,14 @@ export default function AdminPage() {
             {/* Save Button */}
             {saveMsg && <div style={{ background: 'rgba(100,200,100,0.08)', border: '1px solid rgba(100,200,100,0.2)', borderRadius: 12, padding: '12px 16px', color: '#80cc80', fontSize: 14 }}>{saveMsg}</div>}
             <button onClick={saveSettings} disabled={savingSettings}
-              style={{ width: '100%', padding: '15px', borderRadius: 14, border: 'none', background: savingSettings?'#1a1a1a':'#FF5C2B', color: savingSettings?'#444':'white', fontSize: 15, fontWeight: 700, cursor: savingSettings?'not-allowed':'pointer', fontFamily: 'inherit' }}>
+              style={{ width: '100%', padding: '15px', borderRadius: 14, border: 'none', background: savingSettings ? '#1a1a1a' : '#FF5C2B', color: savingSettings ? '#444' : 'white', fontSize: 15, fontWeight: 700, cursor: savingSettings ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
               {savingSettings ? 'Saving...' : '💾 Save Changes — Go Live'}
             </button>
 
             {/* API Status */}
             <div style={{ background: '#111', borderRadius: 14, border: '1px solid rgba(255,255,255,0.05)', padding: 22 }}>
               <h3 style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 14, margin: '0 0 14px' }}>🔑 API Status</h3>
-              {[{ label:'KIE.AI', note:'Image to Video, Audio, Images' }, { label:'Supabase', note:'Auth & Database' }].map(a => (
+              {[{ label: 'KIE.AI', note: 'Image to Video, Audio, Images' }, { label: 'Supabase', note: 'Auth & Database' }].map(a => (
                 <div key={a.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{a.label}</div>
