@@ -197,6 +197,14 @@ function AudioContent() {
   const [toolMidiUrl, setToolMidiUrl] = useState('');
   const [toolVideoUrl, setToolVideoUrl] = useState('');
 
+  const [lyricsExpanded, setLyricsExpanded] = useState(false);
+  // Lyrics Modal state
+  const [showLyricsModal, setShowLyricsModal] = useState(false);
+  const [lyricsModalPrompt, setLyricsModalPrompt] = useState('');
+  const [lyricsModalLoading, setLyricsModalLoading] = useState(false);
+  const [lyricsModalError, setLyricsModalError] = useState('');
+  const [lyricsOptions, setLyricsOptions] = useState<{ title: string; lyrics: string }[]>([]);
+
   const supabase = createClient();
   const hasSongs = clips.length > 0;
 
@@ -215,6 +223,51 @@ function AudioContent() {
 
   const toggleTag = (tag: string) => setTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
   const styleString = selectedTags.join(' · ') || 'No style selected';
+
+  // Generate 2 lyrics options via modal
+  const generateLyricsOptions = async () => {
+    if (!lyricsModalPrompt.trim()) { setLyricsModalError('Please describe what lyrics you want'); return; }
+    setLyricsModalLoading(true); setLyricsModalError(''); setLyricsOptions([]);
+
+    try {
+      // Generate 2 options sequentially with different variation prompts
+      // to avoid getting identical results from the AI
+      const VARIATIONS = [
+        { suffix: '', label: 'Option 1' },
+        { suffix: ' — write a completely different song with different verses, different melody feel, and different words', label: 'Option 2' },
+      ];
+
+      const options: { title: string; lyrics: string }[] = [];
+
+      for (const v of VARIATIONS) {
+        try {
+          const res = await fetch('/api/lyrics', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt: lyricsModalPrompt + v.suffix,
+              variation: v.label,
+            }),
+          });
+          const d = await res.json();
+          if (d.lyrics) options.push({ title: d.title || v.label, lyrics: d.lyrics });
+        } catch { /* skip failed option */ }
+      }
+
+      if (options.length === 0) throw new Error('No lyrics generated — please try again');
+      setLyricsOptions(options);
+    } catch (e: unknown) {
+      setLyricsModalError(e instanceof Error ? e.message : 'Generation failed');
+    }
+    setLyricsModalLoading(false);
+  };
+
+  const selectLyricsOption = (lyricsText: string) => {
+    setLyrics(lyricsText);
+    setShowLyricsModal(false);
+    setLyricsOptions([]);
+    setLyricsModalPrompt('');
+  };
 
   const handleGenerateWithArgs = async (args?: { title: string; lyrics: string; selectedTags: string[]; instrumental: boolean; }) => {
     const t = args?.title ?? title;
@@ -423,11 +476,31 @@ function AudioContent() {
             <div style={{ marginBottom: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <label style={{ fontSize: 12, color: '#555', fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>Lyrics</label>
-                <span style={{ fontSize: 11, color: '#FF5C2B', background: 'rgba(255,92,43,0.1)', padding: '3px 10px', borderRadius: 20, fontWeight: 600 }}>AI will sing exactly these words</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 11, color: '#FF5C2B', background: 'rgba(255,92,43,0.1)', padding: '3px 10px', borderRadius: 20, fontWeight: 600 }}>AI will sing exactly these words</span>
+                  <button onClick={() => { setShowLyricsModal(true); setLyricsOptions([]); setLyricsModalPrompt(''); setLyricsModalError(''); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 12px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.15)', background: '#1a1a1a', color: '#aaa', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#FF5C2B'; e.currentTarget.style.color = '#FF5C2B'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; e.currentTarget.style.color = '#aaa'; }}>
+                    ✨ Write Full Song
+                  </button>
+                  {/* Expand/Collapse button */}
+                  <button onClick={() => setLyricsExpanded(v => !v)}
+                    title={lyricsExpanded ? 'Collapse' : 'Expand lyrics'}
+                    style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: '#1a1a1a', color: '#666', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#FF5C2B'; e.currentTarget.style.color = '#FF5C2B'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = '#666'; }}>
+                    {lyricsExpanded
+                      ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="4,14 10,14 10,20" /><polyline points="20,10 14,10 14,4" /><line x1="10" y1="14" x2="3" y2="21" /><line x1="21" y1="3" x2="14" y2="10" /></svg>
+                      : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15,3 21,3 21,9" /><polyline points="9,21 3,21 3,15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></svg>
+                    }
+                  </button>
+                </div>
               </div>
-              <textarea value={lyrics} onChange={e => setLyrics(e.target.value)} rows={7}
+              <textarea value={lyrics} onChange={e => setLyrics(e.target.value)}
+                rows={lyricsExpanded ? 20 : 7}
                 placeholder={'Khaws wb cov lus\nLos txog hnub no\nPhem los zoo\nKuv yeej tsis tso'}
-                style={{ width: '100%', padding: '14px 16px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.08)', background: '#141414', color: 'white', fontSize: 14, outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.8 }}
+                style={{ width: '100%', padding: '14px 16px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.08)', background: '#141414', color: 'white', fontSize: 14, outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.8, transition: 'all 0.3s ease' }}
                 onFocus={e => e.target.style.borderColor = '#FF5C2B'}
                 onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.08)'}
               />
@@ -610,7 +683,7 @@ function AudioContent() {
           </button>
         </main>
 
-        {/* Right panel */}
+        {/* Right panel — Generated Songs */}
         {hasSongs && (
           <aside style={{ width: 390, position: 'fixed', top: 56, right: 0, bottom: 0, background: '#0d0d0d', borderLeft: '1px solid rgba(255,255,255,0.08)', padding: '24px 20px', overflowY: 'auto', zIndex: 100, display: 'flex', flexDirection: 'column' }}>
             <div style={{ marginBottom: 20 }}>
@@ -626,6 +699,96 @@ function AudioContent() {
           </aside>
         )}
       </div>
+
+      {/* ── Lyrics Modal ── */}
+      {showLyricsModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+          onClick={e => { if (e.target === e.currentTarget) setShowLyricsModal(false); }}>
+          <div style={{ background: '#111', borderRadius: 20, width: '100%', maxWidth: 900, maxHeight: '90vh', display: 'flex', flexDirection: 'column', border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+
+            {/* Modal header */}
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontFamily: "var(--font-heading,'Syne',system-ui,sans-serif)", fontWeight: 800, fontSize: 18, color: 'white' }}>✍️ Write Full Song</div>
+                <div style={{ fontSize: 12, color: '#444', marginTop: 2 }}>Describe your song and AI will generate 2 lyric options</div>
+              </div>
+              <button onClick={() => setShowLyricsModal(false)}
+                style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: '#555', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit' }}>✕</button>
+            </div>
+
+            {/* Lyrics options — shown after generation */}
+            {lyricsOptions.length > 0 && (
+              <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  {lyricsOptions.map((opt, i) => (
+                    <div key={i} style={{ background: '#0a0a0a', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                      <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div style={{ fontFamily: "var(--font-heading,'Syne',system-ui,sans-serif)", fontWeight: 800, fontSize: 16, color: 'white' }}>{opt.title || `Option ${i + 1}`}</div>
+                      </div>
+                      <div style={{ flex: 1, padding: '14px 16px', overflowY: 'auto', maxHeight: 320 }}>
+                        <pre style={{ fontSize: 13, color: '#888', whiteSpace: 'pre-wrap', lineHeight: 1.9, margin: 0, fontFamily: 'inherit' }}>{opt.lyrics}</pre>
+                      </div>
+                      <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                        <button onClick={() => selectLyricsOption(opt.lyrics)}
+                          style={{ width: '100%', padding: '12px', borderRadius: 12, border: 'none', background: 'linear-gradient(90deg,#FF5C2B,#e04020)', color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          Select This Option
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Empty state */}
+            {lyricsOptions.length === 0 && !lyricsModalLoading && (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
+                <div style={{ textAlign: 'center', color: '#333' }}>
+                  <div style={{ fontSize: 48, marginBottom: 16 }}>✍️</div>
+                  <div style={{ fontSize: 15, color: '#555', marginBottom: 4 }}>Enter a prompt below to generate lyrics.</div>
+                  <div style={{ fontSize: 12, color: '#333' }}>AI will create 2 different lyric options for you to choose from.</div>
+                </div>
+              </div>
+            )}
+
+            {/* Loading state */}
+            {lyricsModalLoading && (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
+                <div style={{ textAlign: 'center' }}>
+                  <span style={{ width: 40, height: 40, border: '3px solid rgba(255,92,43,0.3)', borderTopColor: '#FF5C2B', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block', marginBottom: 16 }} />
+                  <div style={{ fontSize: 14, color: '#555' }}>Writing your lyrics...</div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal footer — prompt input */}
+            <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.07)', background: '#0d0d0d' }}>
+              {lyricsModalError && (
+                <div style={{ fontSize: 12, color: '#f66', marginBottom: 10 }}>⚠️ {lyricsModalError}</div>
+              )}
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: '#1a1a1a', borderRadius: 14, padding: '10px 16px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <span style={{ color: '#FF5C2B', fontSize: 14, flexShrink: 0 }}>✦</span>
+                  <input
+                    value={lyricsModalPrompt}
+                    onChange={e => setLyricsModalPrompt(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && !lyricsModalLoading && generateLyricsOptions()}
+                    placeholder="Describe the lyrics you want, or share a theme or topic..."
+                    style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'white', fontSize: 14, fontFamily: 'inherit' }}
+                  />
+                </div>
+                <button onClick={generateLyricsOptions} disabled={lyricsModalLoading || !lyricsModalPrompt.trim()}
+                  style={{ padding: '12px 20px', borderRadius: 14, border: 'none', background: lyricsModalLoading || !lyricsModalPrompt.trim() ? '#1a1a1a' : 'linear-gradient(90deg,#FF5C2B,#e04020)', color: lyricsModalLoading || !lyricsModalPrompt.trim() ? '#444' : 'white', fontSize: 14, fontWeight: 700, cursor: lyricsModalLoading || !lyricsModalPrompt.trim() ? 'not-allowed' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {lyricsModalLoading
+                    ? <><span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />Writing...</>
+                    : <>✍️ Write Lyrics</>
+                  }
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
