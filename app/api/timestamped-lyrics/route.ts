@@ -8,36 +8,22 @@ export async function POST(req: NextRequest) {
         const apiKey = process.env.KIE_API_KEY;
         if (!apiKey) return NextResponse.json({ error: 'KIE_API_KEY not set' }, { status: 500 });
 
-        // Build URL — audioId is optional
         const url = audioId
             ? `https://api.kie.ai/api/v1/generate/get-timestamped-lyrics?taskId=${taskId}&audioId=${audioId}`
             : `https://api.kie.ai/api/v1/generate/get-timestamped-lyrics?taskId=${taskId}`;
 
-        const res = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${apiKey}` },
-        });
+        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${apiKey}` } });
         const data = await res.json();
-        console.log('Timestamped lyrics raw:', JSON.stringify(data).slice(0, 400));
+        console.log('Timestamped lyrics:', JSON.stringify(data).slice(0, 400));
 
-        if (!res.ok || data.code !== 200) {
-            return NextResponse.json({ error: data.msg || 'Failed to fetch timestamps' }, { status: 500 });
-        }
+        if (!res.ok || data.code !== 200) return NextResponse.json({ error: data.msg || 'Failed to fetch timestamps' }, { status: 500 });
 
-        // Parse word-level timestamps — try multiple shapes
         const payload = data.data || data;
-        const words: { word: string; startTime: number; endTime: number }[] =
-            payload?.words ||
-            payload?.timestamps ||
-            payload?.lrcData?.words ||
-            payload?.response?.words ||
-            [];
-
-        // Also return raw LRC string if present
-        const lrc: string = payload?.lrc || payload?.lrcData?.lrc || payload?.response?.lrc || '';
+        const words = payload?.words || payload?.timestamps || payload?.lrcData?.words || payload?.response?.words || [];
+        const lrc = payload?.lrc || payload?.lrcData?.lrc || payload?.response?.lrc || '';
 
         return NextResponse.json({ words, lrc });
     } catch (e: unknown) {
-        console.error('Timestamped lyrics error:', e);
         return NextResponse.json({ error: e instanceof Error ? e.message : 'Server error' }, { status: 500 });
     }
 }

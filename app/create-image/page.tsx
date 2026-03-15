@@ -33,6 +33,7 @@ const RATIOS = [
 
 function CreateImageContent() {
   const [prompt, setPrompt] = useState('');
+  const [aiModel, setAiModel] = useState<'flux' | 'nano-banana'>('flux');
   const [ratio, setRatio] = useState('1:1');
   const [selectedTags, setTags] = useState<string[]>([]);
   const [status, setStatus] = useState<'idle' | 'generating' | 'done' | 'error'>('idle');
@@ -136,6 +137,27 @@ function CreateImageContent() {
 
           {/* Left panel — controls */}
           <div style={{ borderRight: '1px solid rgba(255,255,255,0.05)', overflowY: 'auto', padding: '24px 24px' }}>
+
+            {/* Model Selector */}
+            <div style={{ marginBottom: 22 }}>
+              <label style={{ display: 'block', fontSize: 12, color: '#555', fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 }}>AI Model</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {[
+                  { id: 'flux' as const, name: 'FLUX Kontext', desc: 'High quality, photorealistic', icon: '⚡', badge: 'Pro' },
+                  { id: 'nano-banana' as const, name: 'Nano Banana 2', desc: 'Fast & creative generations', icon: '🍌', badge: 'New' },
+                ].map(m => (
+                  <button key={m.id} onClick={() => setAiModel(m.id)}
+                    style={{ padding: '14px', borderRadius: 14, border: `2px solid ${aiModel === m.id ? '#FF5C2B' : 'rgba(255,255,255,0.07)'}`, background: aiModel === m.id ? 'rgba(255,92,43,0.1)' : '#141414', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', transition: 'all 0.2s' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                      <span style={{ fontSize: 22 }}>{m.icon}</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: aiModel === m.id ? '#FF5C2B' : 'rgba(255,255,255,0.07)', color: aiModel === m.id ? 'white' : '#444' }}>{m.badge}</span>
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: aiModel === m.id ? 'white' : '#666', marginBottom: 3 }}>{m.name}</div>
+                    <div style={{ fontSize: 11, color: aiModel === m.id ? '#aaa' : '#333' }}>{m.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {/* Prompt */}
             <div style={{ marginBottom: 22 }}>

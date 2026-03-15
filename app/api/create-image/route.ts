@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, aspect_ratio, style, userId, userEmail } = await req.json();
+    const { prompt, aspect_ratio, style, userId, userEmail, model } = await req.json();
     if (!prompt) return NextResponse.json({ error: 'Prompt required' }, { status: 400 });
 
     const kieKey = process.env.KIE_API_KEY;
@@ -11,115 +11,173 @@ export async function POST(req: NextRequest) {
 
     const kiePrompt = style ? `${prompt}, ${style} style` : prompt;
 
-    // Generate
-    const createRes = await fetch('https://api.kie.ai/api/v1/flux/kontext/generate', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${kieKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt: kiePrompt,
-        aspectRatio: aspect_ratio || '1:1',
-        outputFormat: 'jpeg',
-        model: 'flux-kontext-pro',
-        safetyTolerance: 2,
-        enableTranslation: true,
-        promptUpsampling: false,
-        callBackUrl: 'https://hmong-creative.vercel.app/api/image-callback',
-      }),
-    });
-    const createData = await createRes.json();
-    console.log('Create-image full response:', JSON.stringify(createData).slice(0, 300));
-
-    if (createData.code !== 200 || !createData.data?.taskId) {
-      return NextResponse.json({ error: createData.msg || `KIE error: ${JSON.stringify(createData)}` }, { status: 500 });
+    // ── Model: Nano Banana ──
+    if (model === 'nano-banana') {
+      return await generateNanoBanana(kieKey, kiePrompt, aspect_ratio, userId, userEmail, prompt);
     }
 
-    const taskId = createData.data.taskId;
-
-    // Poll — wait for image URL
-    for (let i = 0; i < 40; i++) {
-      await new Promise(r => setTimeout(r, 5000));
-
-      const pollRes = await fetch(
-        `https://api.kie.ai/api/v1/flux/kontext/record-info?taskId=${taskId}`,
-        { headers: { 'Authorization': `Bearer ${kieKey}` } }
-      );
-      const poll = await pollRes.json();
-
-      // Log first 3 polls fully so we can see the exact structure
-      if (i < 3) console.log(`Poll #${i + 1} full:`, JSON.stringify(poll).slice(0, 500));
-
-      const d = poll?.data || {};
-      const successFlag = d?.successFlag;
-      const errorCode = d?.errorCode;
-      const response = d?.response;
-
-      console.log(`Poll #${i + 1} successFlag:${successFlag} errorCode:${errorCode}`);
-
-      if (successFlag === 1) {
-        // Parse response — may be a JSON string, a plain URL string, or an object
-        let parsed = response;
-        if (typeof response === 'string') {
-          // Could be a direct URL or JSON
-          if (response.startsWith('http')) {
-            // It's the image URL directly
-            const imageUrl = response;
-            await saveToDb(userId, userEmail, prompt, imageUrl);
-            return NextResponse.json({ imageUrl });
-          }
-          try { parsed = JSON.parse(response); } catch { parsed = response; }
-        }
-
-        console.log('Parsed response:', JSON.stringify(parsed).slice(0, 300));
-
-        // Try every possible field name KIE might use
-        // KIE Flux Kontext returns: data.response.resultImageUrl
-        const imageUrl: string =
-          parsed?.resultImageUrl ||
-          parsed?.originImageUrl ||
-          parsed?.imageUrl ||
-          parsed?.image_url ||
-          parsed?.url ||
-          parsed?.images?.[0] ||
-          parsed?.images?.[0]?.url ||
-          parsed?.data?.[0]?.url ||
-          parsed?.output?.[0] ||
-          parsed?.result ||
-          parsed?.fileUrl ||
-          // Also check top-level data fields
-          d?.resultImageUrl ||
-          d?.originImageUrl ||
-          d?.imageUrl ||
-          d?.image_url ||
-          d?.url ||
-          d?.fileUrl ||
-          '';
-
-        if (imageUrl) {
-          console.log('Image URL found:', imageUrl.slice(0, 100));
-          await saveToDb(userId, userEmail, prompt, imageUrl);
-          return NextResponse.json({ imageUrl });
-        }
-
-        // successFlag=1 but no URL — log and return error with full data
-        console.log('successFlag=1 but no URL. Full d:', JSON.stringify(d).slice(0, 500));
-        return NextResponse.json({
-          error: 'Image generated but URL not found. Please try again.',
-        }, { status: 500 });
-      }
-
-      // Failed
-      if (errorCode || successFlag === -1) {
-        return NextResponse.json({ error: `Generation failed: ${errorCode || 'unknown error'}` }, { status: 500 });
-      }
-      // successFlag === 0 = still processing, keep polling
-    }
-
-    return NextResponse.json({ error: 'Timeout — please try again' }, { status: 408 });
+    // ── Model: FLUX Kontext (default) ──
+    return await generateFlux(kieKey, kiePrompt, aspect_ratio, userId, userEmail, prompt);
 
   } catch (e: unknown) {
     console.error('Create image error:', e);
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Server error' }, { status: 500 });
   }
+}
+
+// ── FLUX Kontext ──
+async function generateFlux(kieKey: string, prompt: string, aspect_ratio: string, userId: string, userEmail: string, rawPrompt: string) {
+  const createRes = await fetch('https://api.kie.ai/api/v1/flux/kontext/generate', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${kieKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prompt,
+      aspectRatio: aspect_ratio || '1:1',
+      outputFormat: 'jpeg',
+      model: 'flux-kontext-pro',
+      safetyTolerance: 2,
+      enableTranslation: true,
+      promptUpsampling: false,
+      callBackUrl: 'https://hmong-creative.vercel.app/api/image-callback',
+    }),
+  });
+  const createData = await createRes.json();
+  console.log('FLUX create:', createData.code, createData.msg, 'taskId:', createData.data?.taskId);
+
+  if (createData.code !== 200 || !createData.data?.taskId) {
+    return NextResponse.json({ error: createData.msg || 'FLUX generation failed' }, { status: 500 });
+  }
+
+  const taskId = createData.data.taskId;
+
+  for (let i = 0; i < 40; i++) {
+    await new Promise(r => setTimeout(r, 5000));
+    const poll = await (await fetch(
+      `https://api.kie.ai/api/v1/flux/kontext/record-info?taskId=${taskId}`,
+      { headers: { 'Authorization': `Bearer ${kieKey}` } }
+    )).json();
+
+    if (i < 2) console.log(`FLUX poll #${i + 1}:`, JSON.stringify(poll).slice(0, 400));
+
+    const d = poll?.data || {};
+    const successFlag = d?.successFlag;
+    const response = d?.response;
+
+    if (successFlag === 1) {
+      let parsed = response;
+      if (typeof response === 'string') {
+        if (response.startsWith('http')) {
+          await saveToDb(userId, userEmail, rawPrompt, response);
+          return NextResponse.json({ imageUrl: response });
+        }
+        try { parsed = JSON.parse(response); } catch { parsed = response; }
+      }
+      const imageUrl = parsed?.resultImageUrl || parsed?.originImageUrl || parsed?.imageUrl
+        || parsed?.image_url || parsed?.url
+        || d?.resultImageUrl || d?.imageUrl || d?.url || '';
+      if (imageUrl) {
+        await saveToDb(userId, userEmail, rawPrompt, imageUrl);
+        return NextResponse.json({ imageUrl });
+      }
+      return NextResponse.json({ error: 'Image generated but URL not found' }, { status: 500 });
+    }
+    if (d?.errorCode || successFlag === -1) {
+      return NextResponse.json({ error: `FLUX failed: ${d?.errorCode || 'unknown'}` }, { status: 500 });
+    }
+  }
+  return NextResponse.json({ error: 'Timeout — please try again' }, { status: 408 });
+}
+
+// ── Nano Banana ──
+async function generateNanoBanana(kieKey: string, prompt: string, aspect_ratio: string, userId: string, userEmail: string, rawPrompt: string) {
+  console.log('Nano Banana generate:', prompt.slice(0, 80), 'ratio:', aspect_ratio);
+
+  // Try known kie.ai nano banana endpoint patterns
+  const NANO_ENDPOINTS = [
+    {
+      url: 'https://api.kie.ai/api/v1/nano-banana/generate',
+      body: { prompt, aspectRatio: aspect_ratio || '1:1', callBackUrl: 'https://hmong-creative.vercel.app/api/image-callback' },
+      poll: 'https://api.kie.ai/api/v1/nano-banana/record-info',
+    },
+    {
+      url: 'https://api.kie.ai/api/v1/nano-banana-2/generate',
+      body: { prompt, aspectRatio: aspect_ratio || '1:1', callBackUrl: 'https://hmong-creative.vercel.app/api/image-callback' },
+      poll: 'https://api.kie.ai/api/v1/nano-banana-2/record-info',
+    },
+    {
+      url: 'https://api.kie.ai/api/v1/image/nano-banana/generate',
+      body: { prompt, aspectRatio: aspect_ratio || '1:1' },
+      poll: 'https://api.kie.ai/api/v1/image/nano-banana/record-info',
+    },
+  ];
+
+  let taskId = '';
+  let pollBase = '';
+
+  for (const ep of NANO_ENDPOINTS) {
+    try {
+      const res = await fetch(ep.url, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${kieKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(ep.body),
+        signal: AbortSignal.timeout(10000),
+      });
+      const data = await res.json();
+      console.log(`Nano endpoint ${ep.url.split('/').pop()} -> HTTP:${res.status} code:${data.code} msg:${data.msg}`);
+
+      if (data.code === 200 && data.data?.taskId) {
+        taskId = data.data.taskId;
+        pollBase = ep.poll;
+        console.log('Nano Banana taskId:', taskId);
+        break;
+      }
+    } catch (e) {
+      console.log(`Nano endpoint failed:`, e instanceof Error ? e.message.slice(0, 50) : e);
+    }
+  }
+
+  if (!taskId) {
+    return NextResponse.json({ error: 'Nano Banana endpoint not found — check API documentation' }, { status: 500 });
+  }
+
+  // Poll
+  for (let i = 0; i < 40; i++) {
+    await new Promise(r => setTimeout(r, 4000));
+    const poll = await (await fetch(
+      `${pollBase}?taskId=${taskId}`,
+      { headers: { 'Authorization': `Bearer ${kieKey}` } }
+    )).json();
+
+    if (i < 3) console.log(`Nano poll #${i + 1}:`, JSON.stringify(poll).slice(0, 400));
+
+    const d = poll?.data || {};
+    const successFlag = d?.successFlag;
+    const state = d?.status || d?.state;
+    const response = d?.response;
+
+    // successFlag pattern (same as FLUX)
+    if (successFlag === 1 || state === 'SUCCESS') {
+      let parsed = response;
+      if (typeof response === 'string') {
+        if (response.startsWith('http')) {
+          await saveToDb(userId, userEmail, rawPrompt, response);
+          return NextResponse.json({ imageUrl: response });
+        }
+        try { parsed = JSON.parse(response); } catch { parsed = response; }
+      }
+      const imageUrl = parsed?.resultImageUrl || parsed?.imageUrl || parsed?.image_url
+        || parsed?.url || d?.imageUrl || d?.url || '';
+      if (imageUrl) {
+        await saveToDb(userId, userEmail, rawPrompt, imageUrl);
+        return NextResponse.json({ imageUrl });
+      }
+      return NextResponse.json({ error: 'Nano Banana: image generated but URL not found' }, { status: 500 });
+    }
+    if (d?.errorCode || successFlag === -1 || state === 'FAILED') {
+      return NextResponse.json({ error: `Nano Banana failed: ${d?.errorCode || state || 'unknown'}` }, { status: 500 });
+    }
+  }
+  return NextResponse.json({ error: 'Timeout — please try again' }, { status: 408 });
 }
 
 async function saveToDb(userId: string, userEmail: string, prompt: string, imageUrl: string) {
