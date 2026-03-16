@@ -26,7 +26,6 @@ type GeneratedClip = {
 type VocalSep = { vocalUrl: string; instrumentalUrl: string; taskId: string };
 type TimestampWord = { word: string; startTime: number; endTime: number };
 
-// Per-song inline player component
 function SongCard({
   clip, index, onEdit, onRegenerate,
 }: {
@@ -99,16 +98,11 @@ function SongCard({
     setFeatLoading(false);
   };
 
-  const FEATURES = [
-    { id: 'gen-lyrics', icon: '✍️', label: 'Lyrics' },
-    { id: 'timestamps', icon: '⏱️', label: 'Karaoke' },
-    { id: 'cover', icon: '🖼️', label: 'Cover Art' },
-    { id: 'vocals', icon: '🎙️', label: 'Split' },
-    { id: 'midi', icon: '🎹', label: 'MIDI' },
-    { id: 'video', icon: '🎬', label: 'Video' },
-  ];
+  // suppress unused warning
+  void toggleFeature; void runFeature; void genLyrics; void tsWords; void coverUrl; void vocalSep; void midiUrl; void musicVideoUrl; void activeFeature; void featLoading; void featError;
 
   const activeWord = tsWords.find(w => currentTime >= w.startTime && currentTime <= w.endTime);
+  void activeWord;
 
   return (
     <div style={{ background: '#141414', borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)', padding: '16px', marginBottom: 12, flexShrink: 0 }}>
@@ -183,7 +177,7 @@ function AudioContent() {
   const [coverLoading, setCoverLoading] = useState(false);
   const [coverResult, setCoverResult] = useState('');
   const [coverErr, setCoverErr] = useState('');
-  // AI Tools bar (Style section)
+  // AI Tools bar
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
   const [toolMsg, setToolMsg] = useState('');
   const [toolError, setToolError] = useState('');
@@ -196,14 +190,16 @@ function AudioContent() {
   const [toolVocalSep, setToolVocalSep] = useState<VocalSep | null>(null);
   const [toolMidiUrl, setToolMidiUrl] = useState('');
   const [toolVideoUrl, setToolVideoUrl] = useState('');
-
   const [lyricsExpanded, setLyricsExpanded] = useState(false);
-  // Lyrics Modal state
+  // Lyrics Modal
   const [showLyricsModal, setShowLyricsModal] = useState(false);
   const [lyricsModalPrompt, setLyricsModalPrompt] = useState('');
   const [lyricsModalLoading, setLyricsModalLoading] = useState(false);
   const [lyricsModalError, setLyricsModalError] = useState('');
   const [lyricsOptions, setLyricsOptions] = useState<{ title: string; lyrics: string }[]>([]);
+
+  // suppress unused
+  void toolTsWords; void toolVocalSep; void toolMidiUrl; void toolVideoUrl;
 
   const supabase = createClient();
   const hasSongs = clips.length > 0;
@@ -224,36 +220,35 @@ function AudioContent() {
   const toggleTag = (tag: string) => setTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
   const styleString = selectedTags.join(' · ') || 'No style selected';
 
-  // Generate 2 lyrics options via modal
+  // File size validator — 4MB max
+  const validateAudioFile = (file: File, onErr: (msg: string) => void): boolean => {
+    if (file.size > 4 * 1024 * 1024) {
+      onErr(`File is ${(file.size / 1024 / 1024).toFixed(1)}MB — please use a file under 4MB`);
+      return false;
+    }
+    return true;
+  };
+
+  // Lyrics modal — generate 2 options
   const generateLyricsOptions = async () => {
     if (!lyricsModalPrompt.trim()) { setLyricsModalError('Please describe what lyrics you want'); return; }
     setLyricsModalLoading(true); setLyricsModalError(''); setLyricsOptions([]);
-
     try {
-      // Generate 2 options sequentially with different variation prompts
-      // to avoid getting identical results from the AI
       const VARIATIONS = [
         { suffix: '', label: 'Option 1' },
         { suffix: ' — write a completely different song with different verses, different melody feel, and different words', label: 'Option 2' },
       ];
-
       const options: { title: string; lyrics: string }[] = [];
-
       for (const v of VARIATIONS) {
         try {
           const res = await fetch('/api/lyrics', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              prompt: lyricsModalPrompt + v.suffix,
-              variation: v.label,
-            }),
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: lyricsModalPrompt + v.suffix, variation: v.label }),
           });
           const d = await res.json();
           if (d.lyrics) options.push({ title: d.title || v.label, lyrics: d.lyrics });
-        } catch { /* skip failed option */ }
+        } catch { /* skip */ }
       }
-
       if (options.length === 0) throw new Error('No lyrics generated — please try again');
       setLyricsOptions(options);
     } catch (e: unknown) {
@@ -274,11 +269,9 @@ function AudioContent() {
     const l = args?.lyrics ?? lyrics;
     const tags = args?.selectedTags ?? selectedTags;
     const instr = args?.instrumental ?? instrumental;
-
     if (!t) { setError('Please enter a song title'); return; }
     if (!instr && !l) { setError('Please enter lyrics or enable instrumental mode'); return; }
     setStatus('generating'); setError('');
-
     const fullStyle = [
       tags.filter(tag => TAGS.Culture.includes(tag)).join(', '),
       tags.filter(tag => TAGS.Genre.includes(tag)).join(', '),
@@ -286,7 +279,6 @@ function AudioContent() {
       tags.filter(tag => TAGS.Tempo.includes(tag)).join(', '),
       tags.filter(tag => TAGS.Mood.includes(tag)).join(', '),
     ].filter(Boolean).join(', ') || 'pop';
-
     try {
       const res = await fetch('/api/audio', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -294,14 +286,12 @@ function AudioContent() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-
       const inputSnapshot = { title: t, lyrics: l, selectedTags: [...tags], instrumental: instr, taskId: data.taskId || '' };
       const rawClips: { audioUrl?: string; audio_url?: string; url?: string; audioId?: string; id?: string }[] = data.clips || [];
       const builtClips: GeneratedClip[] = rawClips.slice(0, 2).map(c => ({
         ...inputSnapshot, audioUrl: c.audioUrl || c.audio_url || c.url || '', audioId: c.audioId || c.id || '',
       })).filter(c => c.audioUrl);
       if (builtClips.length === 0 && data.audioUrl) builtClips.push({ ...inputSnapshot, audioUrl: data.audioUrl, audioId: '' });
-
       setClips(builtClips);
       setStatus('done');
     } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Generation failed'); setStatus('error'); }
@@ -321,7 +311,6 @@ function AudioContent() {
     setTimeout(() => handleGenerateWithArgs({ title: clip.title, lyrics: clip.lyrics, selectedTags: clip.selectedTags, instrumental: clip.instrumental }), 50);
   };
 
-  // AI Tools bar handlers
   const handleToolClick = (id: string) => {
     if (!hasSongs && ['timestamps', 'vocals', 'midi', 'video'].includes(id)) {
       setToolMsg('Generate a song first to use this tool.');
@@ -339,23 +328,6 @@ function AudioContent() {
         const r = await fetch('/api/lyrics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: `${title || 'Hmong song'} — ${selectedTags.join(', ') || 'pop'} style` }) });
         const d = await r.json(); if (!r.ok) throw new Error(d.error);
         setToolLyrics(d.lyrics || '');
-      } else if (id === 'timestamps') {
-        const r = await fetch('/api/timestamped-lyrics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ taskId: clips[0]?.taskId, audioId: clips[0]?.audioId }) });
-        const d = await r.json(); if (!r.ok) throw new Error(d.error);
-        setToolTsWords(d.words || []);
-      } else if (id === 'vocals') {
-        const r = await fetch('/api/vocal-separation', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ audioUrl: clips[0]?.audioUrl }) });
-        const d = await r.json(); if (!r.ok) throw new Error(d.error);
-        setToolVocalSep({ vocalUrl: d.vocalUrl, instrumentalUrl: d.instrumentalUrl, taskId: d.taskId });
-      } else if (id === 'midi') {
-        if (!toolVocalSep) { setToolError('Run "Separate Vocals" first, then generate MIDI.'); setToolLoading(false); return; }
-        const r = await fetch('/api/midi', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ taskId: toolVocalSep.taskId }) });
-        const d = await r.json(); if (!r.ok) throw new Error(d.error);
-        setToolMidiUrl(d.midiUrl || '');
-      } else if (id === 'video') {
-        const r = await fetch('/api/music-video', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ taskId: clips[0]?.taskId, audioId: clips[0]?.audioId }) });
-        const d = await r.json(); if (!r.ok) throw new Error(d.error);
-        setToolVideoUrl(d.videoUrl || '');
       }
     } catch (e: unknown) { setToolError(e instanceof Error ? e.message : 'Failed'); }
     setToolLoading(false);
@@ -426,8 +398,22 @@ function AudioContent() {
             {showCoverUpload && (
               <div style={{ padding: '14px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', background: '#0f0f0f' }}>
                 <div style={{ marginBottom: 12 }}>
-                  <label style={{ fontSize: 11, color: '#555', fontWeight: 600, display: 'block', marginBottom: 6 }}>Upload Audio File (MP3 / WAV)</label>
-                  <input type="file" accept="audio/*" onChange={e => setCoverFile(e.target.files?.[0] || null)} style={{ fontSize: 12, color: '#888', width: '100%' }} />
+                  <label style={{ fontSize: 11, color: '#555', fontWeight: 600, display: 'block', marginBottom: 6 }}>
+                    Upload Audio File (MP3 / WAV) <span style={{ color: '#333', fontWeight: 400 }}>— max 4MB</span>
+                  </label>
+                  <input type="file" accept="audio/*"
+                    onChange={e => {
+                      const file = e.target.files?.[0] || null;
+                      if (file && !validateAudioFile(file, setCoverErr)) {
+                        setCoverFile(null);
+                        e.target.value = '';
+                      } else {
+                        setCoverErr('');
+                        setCoverFile(file);
+                      }
+                    }}
+                    style={{ fontSize: 12, color: '#888', width: '100%' }} />
+                  {coverFile && <div style={{ fontSize: 11, color: '#4c4', marginTop: 4 }}>✅ {(coverFile.size / 1024 / 1024).toFixed(1)}MB — ready to upload</div>}
                 </div>
                 <div style={{ marginBottom: 12 }}>
                   <label style={{ fontSize: 11, color: '#555', fontWeight: 600, display: 'block', marginBottom: 6 }}>Style <span style={{ color: '#333', fontWeight: 400 }}>(optional)</span></label>
@@ -458,7 +444,6 @@ function AudioContent() {
                       const r = await fetch('/api/cover-audio', { method: 'POST', body: fd });
                       const d = await r.json();
                       if (!r.ok) throw new Error(d.error);
-                      // Store multiple clips joined by || separator
                       const clips = (d.clips || []).map((c: { audioUrl?: string }) => c.audioUrl).filter(Boolean);
                       setCoverResult(clips.length > 0 ? clips.join('||') : (d.audioUrl || ''));
                     } catch (e: unknown) { setCoverErr(e instanceof Error ? e.message : 'Failed'); }
@@ -484,7 +469,6 @@ function AudioContent() {
                     onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; e.currentTarget.style.color = '#aaa'; }}>
                     ✨ Write Full Song
                   </button>
-                  {/* Expand/Collapse button */}
                   <button onClick={() => setLyricsExpanded(v => !v)}
                     title={lyricsExpanded ? 'Collapse' : 'Expand lyrics'}
                     style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: '#1a1a1a', color: '#666', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
@@ -560,12 +544,11 @@ function AudioContent() {
             ))}
           </div>
 
-          {/* ── AI Tools Bar ── */}
+          {/* AI Tools Bar */}
           <div style={{ marginBottom: 24, background: '#0f0f0f', borderRadius: 14, border: '1px solid rgba(255,255,255,0.06)', padding: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <span style={{ fontSize: 14 }}>⚡</span>
               <span style={{ fontSize: 12, fontWeight: 700, color: '#555', letterSpacing: 0.5, textTransform: 'uppercase' }}>AI Tools</span>
-              {!hasSongs && <span style={{ fontSize: 11, color: '#333' }}>— Generate a song to unlock all tools</span>}
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {AI_TOOLS.map(tool => {
@@ -582,11 +565,9 @@ function AudioContent() {
               })}
             </div>
 
-            {/* Locked message */}
             {toolMsg && <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 10, background: 'rgba(255,92,43,0.08)', border: '1px solid rgba(255,92,43,0.2)', color: '#FF5C2B', fontSize: 13 }}>⚠️ {toolMsg}</div>}
             {toolError && <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 10, background: 'rgba(255,80,80,0.08)', border: '1px solid rgba(255,80,80,0.2)', color: '#f66', fontSize: 13 }}>⚠️ {toolError}</div>}
 
-            {/* Tool loading */}
             {toolLoading && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, color: '#555', fontSize: 13 }}>
                 <span style={{ width: 14, height: 14, border: '2px solid #333', borderTopColor: '#FF5C2B', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
@@ -594,7 +575,6 @@ function AudioContent() {
               </div>
             )}
 
-            {/* Tool result panels */}
             {!toolLoading && activeToolId && (
               <div style={{ marginTop: 14, background: '#141414', borderRadius: 12, padding: '14px', border: '1px solid rgba(255,255,255,0.05)' }}>
 
@@ -620,8 +600,22 @@ function AudioContent() {
                   <div>
                     <div style={{ fontSize: 11, color: '#FF5C2B', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>🔁 Cover Generate</div>
                     <div style={{ marginBottom: 10 }}>
-                      <label style={{ fontSize: 11, color: '#555', fontWeight: 600, display: 'block', marginBottom: 6 }}>Upload Audio (MP3/WAV)</label>
-                      <input type="file" accept="audio/*" onChange={e => setToolCoverFile(e.target.files?.[0] || null)} style={{ fontSize: 12, color: '#888', width: '100%' }} />
+                      <label style={{ fontSize: 11, color: '#555', fontWeight: 600, display: 'block', marginBottom: 6 }}>
+                        Upload Audio (MP3/WAV) <span style={{ color: '#333', fontWeight: 400 }}>— max 4MB</span>
+                      </label>
+                      <input type="file" accept="audio/*"
+                        onChange={e => {
+                          const file = e.target.files?.[0] || null;
+                          if (file && !validateAudioFile(file, setToolError)) {
+                            setToolCoverFile(null);
+                            e.target.value = '';
+                          } else {
+                            setToolError('');
+                            setToolCoverFile(file);
+                          }
+                        }}
+                        style={{ fontSize: 12, color: '#888', width: '100%' }} />
+                      {toolCoverFile && <div style={{ fontSize: 11, color: '#4c4', marginTop: 4 }}>✅ {(toolCoverFile.size / 1024 / 1024).toFixed(1)}MB — ready</div>}
                     </div>
                     <div style={{ marginBottom: 12 }}>
                       <label style={{ fontSize: 11, color: '#555', fontWeight: 600, display: 'block', marginBottom: 6 }}>Style (optional)</label>
@@ -648,8 +642,8 @@ function AudioContent() {
                           const fd = new FormData(); fd.append('audio', toolCoverFile); fd.append('style', toolCoverStyle || 'pop');
                           const r = await fetch('/api/cover-audio', { method: 'POST', body: fd });
                           const d = await r.json(); if (!r.ok) throw new Error(d.error);
-                          const clips = (d.clips || []).map((cl: { audioUrl?: string }) => cl.audioUrl).filter(Boolean);
-                          setToolCoverResult(clips.length > 0 ? clips.join('||') : (d.audioUrl || ''));
+                          const cls = (d.clips || []).map((cl: { audioUrl?: string }) => cl.audioUrl).filter(Boolean);
+                          setToolCoverResult(cls.length > 0 ? cls.join('||') : (d.audioUrl || ''));
                         } catch (e: unknown) { setToolError(e instanceof Error ? e.message : 'Failed'); }
                         setToolLoading(false);
                       }}
@@ -658,9 +652,6 @@ function AudioContent() {
                     </button>
                   </div>
                 )}
-
-
-
               </div>
             )}
           </div>
@@ -700,13 +691,11 @@ function AudioContent() {
         )}
       </div>
 
-      {/* ── Lyrics Modal ── */}
+      {/* Lyrics Modal */}
       {showLyricsModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
           onClick={e => { if (e.target === e.currentTarget) setShowLyricsModal(false); }}>
           <div style={{ background: '#111', borderRadius: 20, width: '100%', maxWidth: 900, maxHeight: '90vh', display: 'flex', flexDirection: 'column', border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
-
-            {/* Modal header */}
             <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ fontFamily: "var(--font-heading,'Syne',system-ui,sans-serif)", fontWeight: 800, fontSize: 18, color: 'white' }}>✍️ Write Full Song</div>
@@ -716,7 +705,6 @@ function AudioContent() {
                 style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: '#555', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit' }}>✕</button>
             </div>
 
-            {/* Lyrics options — shown after generation */}
             {lyricsOptions.length > 0 && (
               <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -740,10 +728,9 @@ function AudioContent() {
               </div>
             )}
 
-            {/* Empty state */}
             {lyricsOptions.length === 0 && !lyricsModalLoading && (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
-                <div style={{ textAlign: 'center', color: '#333' }}>
+                <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: 48, marginBottom: 16 }}>✍️</div>
                   <div style={{ fontSize: 15, color: '#555', marginBottom: 4 }}>Enter a prompt below to generate lyrics.</div>
                   <div style={{ fontSize: 12, color: '#333' }}>AI will create 2 different lyric options for you to choose from.</div>
@@ -751,7 +738,6 @@ function AudioContent() {
               </div>
             )}
 
-            {/* Loading state */}
             {lyricsModalLoading && (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
                 <div style={{ textAlign: 'center' }}>
@@ -761,17 +747,12 @@ function AudioContent() {
               </div>
             )}
 
-            {/* Modal footer — prompt input */}
             <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.07)', background: '#0d0d0d' }}>
-              {lyricsModalError && (
-                <div style={{ fontSize: 12, color: '#f66', marginBottom: 10 }}>⚠️ {lyricsModalError}</div>
-              )}
+              {lyricsModalError && <div style={{ fontSize: 12, color: '#f66', marginBottom: 10 }}>⚠️ {lyricsModalError}</div>}
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: '#1a1a1a', borderRadius: 14, padding: '10px 16px', border: '1px solid rgba(255,255,255,0.08)' }}>
                   <span style={{ color: '#FF5C2B', fontSize: 14, flexShrink: 0 }}>✦</span>
-                  <input
-                    value={lyricsModalPrompt}
-                    onChange={e => setLyricsModalPrompt(e.target.value)}
+                  <input value={lyricsModalPrompt} onChange={e => setLyricsModalPrompt(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && !lyricsModalLoading && generateLyricsOptions()}
                     placeholder="Describe the lyrics you want, or share a theme or topic..."
                     style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'white', fontSize: 14, fontFamily: 'inherit' }}
@@ -781,8 +762,7 @@ function AudioContent() {
                   style={{ padding: '12px 20px', borderRadius: 14, border: 'none', background: lyricsModalLoading || !lyricsModalPrompt.trim() ? '#1a1a1a' : 'linear-gradient(90deg,#FF5C2B,#e04020)', color: lyricsModalLoading || !lyricsModalPrompt.trim() ? '#444' : 'white', fontSize: 14, fontWeight: 700, cursor: lyricsModalLoading || !lyricsModalPrompt.trim() ? 'not-allowed' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 8 }}>
                   {lyricsModalLoading
                     ? <><span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />Writing...</>
-                    : <>✍️ Write Lyrics</>
-                  }
+                    : <>✍️ Write Lyrics</>}
                 </button>
               </div>
             </div>

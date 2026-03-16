@@ -234,9 +234,9 @@ function ImageToVideoContent() {
               </div>
 
               {/* Video area */}
-              <div style={{ aspectRatio: '16/9', background: '#0a0a0a', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', minHeight: 380 }}>
+              <div style={{ background: '#0a0a0a', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', minHeight: 380 }}>
                 {videoUrl ? (
-                  <video src={videoUrl} controls autoPlay loop style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  <video src={videoUrl} controls autoPlay loop style={{ width: '100%', height: 'auto', maxHeight: '70vh', display: 'block', objectFit: 'contain' }} />
                 ) : (
                   <div style={{ textAlign: 'center', padding: 20 }}>
                     {status === 'generating' ? (
