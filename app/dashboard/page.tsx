@@ -9,10 +9,10 @@ import { useSiteSettings } from '../../lib/useSiteSettings';
 import AuthGuard from '../components/AuthGuard';
 
 function DashboardContent() {
-  const [user, setUser]         = useState<{ name: string; email: string; id: string } | null>(null);
-  const [stats, setStats]       = useState({ videos: 0, images: 0, audio: 0 });
-  const [loading, setLoading]   = useState(true);
-  const router   = useRouter();
+  const [user, setUser] = useState<{ name: string; email: string; id: string } | null>(null);
+  const [stats, setStats] = useState({ videos: 0, images: 0, audio: 0 });
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
   const supabase = createClient();
   const { settings } = useSiteSettings();
 
@@ -26,10 +26,10 @@ function DashboardContent() {
       setStats({
         videos: profile.videos_generated || 0,
         images: profile.images_generated || 0,
-        audio:  profile.audio_generated  || 0,
+        audio: profile.audio_generated || 0,
       });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -45,7 +45,7 @@ function DashboardContent() {
       await supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', u.id);
     };
     load();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Refresh stats when user comes back to tab
@@ -61,9 +61,10 @@ function DashboardContent() {
   };
 
   const TOOLS = [
-    { icon: '🎬', label: 'Image to Video', desc: 'Animate your images with AI',  href: '/image-to-video', enabled: settings.feature_image_to_video, color: '#FFB347', count: stats.videos, badge: 'Active' },
-    { icon: '🎵', label: 'Audio AI',        desc: 'Generate music & voiceovers', href: '/audio',          enabled: settings.feature_audio_ai,       color: '#d4aaff', count: stats.audio,  badge: settings.feature_audio_ai ? 'Active' : 'Soon' },
-    { icon: '🖼️', label: 'Create Image',   desc: 'Text to image generation',    href: '/create-image',   enabled: settings.feature_create_image,   color: '#a8d8ea', count: stats.images, badge: settings.feature_create_image ? 'Active' : 'Soon' },
+    { icon: '🎬', label: 'Image to Video', desc: 'Animate your images with AI', href: '/image-to-video', enabled: settings.feature_image_to_video, color: '#FFB347', count: stats.videos, badge: 'Active' },
+    { icon: '🎭', label: 'Lip Sync Avatar', desc: 'Photo + audio = talking avatar', href: '/lip-sync', enabled: true, color: '#a020a0', count: 0, badge: 'New' },
+    { icon: '🎵', label: 'Audio AI', desc: 'Generate music & voiceovers', href: '/audio', enabled: settings.feature_audio_ai, color: '#d4aaff', count: stats.audio, badge: settings.feature_audio_ai ? 'Active' : 'Soon' },
+    { icon: '🖼️', label: 'Create Image', desc: 'Text to image generation', href: '/create-image', enabled: settings.feature_create_image, color: '#a8d8ea', count: stats.images, badge: settings.feature_create_image ? 'Active' : 'Soon' },
   ];
 
   if (loading) return (
@@ -105,7 +106,7 @@ function DashboardContent() {
           {[
             { label: 'Videos Made', value: stats.videos, icon: '🎬', color: '#FFB347' },
             { label: 'Images Made', value: stats.images, icon: '🖼️', color: '#a8d8ea' },
-            { label: 'Tracks Made', value: stats.audio,  icon: '🎵', color: '#d4aaff' },
+            { label: 'Tracks Made', value: stats.audio, icon: '🎵', color: '#d4aaff' },
           ].map(s => (
             <div key={s.label} style={{ background: '#111', borderRadius: 16, padding: '20px', border: '1px solid rgba(255,255,255,0.05)' }}>
               <div style={{ fontSize: 24, marginBottom: 10 }}>{s.icon}</div>
