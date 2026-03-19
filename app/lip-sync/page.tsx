@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AuthGuard from '../components/AuthGuard';
@@ -10,6 +10,7 @@ function LipSyncContent() {
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState('');
     const [audioFile, setAudioFile] = useState<File | null>(null);
+    const [audioDuration, setAudioDuration] = useState(0); // ✅ NEW: track duration
     const [prompt, setPrompt] = useState('natural lip sync, realistic facial expressions');
     const [model, setModel] = useState<'standard' | 'pro'>('standard');
     const [status, setStatus] = useState<'idle' | 'generating' | 'done' | 'error'>('idle');
@@ -19,6 +20,9 @@ function LipSyncContent() {
     const [dragOver, setDragOver] = useState(false);
     const router = useRouter();
     const supabase = createClient();
+
+    // ✅ Hidden audio element to check duration before upload
+    const audioCheckRef = useRef<HTMLAudioElement>(null);
 
     useEffect(() => {
         supabase.auth.getUser().then(() => { });
@@ -31,15 +35,44 @@ function LipSyncContent() {
         setImageFile(file); setImagePreview(URL.createObjectURL(file)); setError('');
     };
 
+    // ✅ NEW: Check audio duration using Web Audio API
     const handleAudioFile = (file: File) => {
         if (!file.type.startsWith('audio/')) { setError('Please upload an audio file (MP3, WAV, AAC)'); return; }
         if (file.size > 10 * 1024 * 1024) { setError('Audio too large — max 10MB'); return; }
-        setAudioFile(file); setError('');
+
+        // Check duration before accepting
+        const url = URL.createObjectURL(file);
+        const audio = new Audio(url);
+        audio.onloadedmetadata = () => {
+            const dur = audio.duration;
+            URL.revokeObjectURL(url);
+            if (dur > 15) {
+                setError(`Audio is ${dur.toFixed(1)}s — Kling AI Avatar requires max 15 seconds. Please trim your audio and try again.`);
+                setAudioFile(null);
+                setAudioDuration(0);
+                return;
+            }
+            setAudioDuration(dur);
+            setAudioFile(file);
+            setError('');
+        };
+        audio.onerror = () => {
+            // If we can't read metadata, allow it and let server validate
+            URL.revokeObjectURL(url);
+            setAudioFile(file);
+            setAudioDuration(0);
+            setError('');
+        };
     };
 
     const handleGenerate = async () => {
         if (!imageFile) { setError('Please upload a photo'); return; }
         if (!audioFile) { setError('Please upload an audio file'); return; }
+        // Double-check duration on generate
+        if (audioDuration > 15) {
+            setError(`Audio is ${audioDuration.toFixed(1)}s — max 15 seconds allowed. Please trim and re-upload.`);
+            return;
+        }
         setStatus('generating'); setError(''); setProgress(5);
         const interval = setInterval(() => setProgress(p => Math.min(p + 1, 90)), 4000);
         try {
@@ -73,6 +106,9 @@ function LipSyncContent() {
 
     return (
         <div style={{ minHeight: '100vh', background: '#080808', fontFamily: "var(--font-body,'DM Sans',system-ui,sans-serif)", color: 'white' }}>
+
+            {/* Hidden audio element for duration check */}
+            <audio ref={audioCheckRef} style={{ display: 'none' }} />
 
             {/* Navbar */}
             <div style={{ position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)', width: 'calc(100% - 32px)', maxWidth: 1200, background: 'rgba(255,255,255,0.96)', borderRadius: 100, padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 9999, boxShadow: '0 4px 40px rgba(0,0,0,0.12)' }}>
@@ -155,26 +191,44 @@ function LipSyncContent() {
 
                         {/* Audio upload */}
                         <div style={{ background: '#111', borderRadius: 20, border: '1px solid rgba(255,255,255,0.06)', padding: '14px 20px' }}>
-                            <div style={{ marginBottom: 10 }}>
+                            <div style={{ marginBottom: 6 }}>
                                 <span style={{ fontSize: 12, color: '#555', fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>🎵 Upload Audio</span>
-                                <span style={{ fontSize: 11, color: '#333', marginLeft: 8 }}>MP3, WAV, AAC — max 10MB</span>
+                                <span style={{ fontSize: 11, color: '#333', marginLeft: 8 }}>MP3, WAV, AAC</span>
                             </div>
+
+                            {/* ✅ NEW: 15 second warning banner */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,170,0,0.08)', border: '1px solid rgba(255,170,0,0.25)', borderRadius: 10, padding: '8px 12px', marginBottom: 10 }}>
+                                <span style={{ fontSize: 14, flexShrink: 0 }}>⚠️</span>
+                                <span style={{ fontSize: 11, color: '#ffaa00', lineHeight: 1.5 }}>
+                                    <strong>Max 15 seconds</strong> — Kling AI Avatar only accepts audio up to 15s.
+                                    Trim your audio before uploading.
+                                </span>
+                            </div>
+
                             <label style={{ display: 'block', cursor: 'pointer' }}>
                                 <input type="file" accept="audio/*" onChange={e => { const f = e.target.files?.[0]; if (f) handleAudioFile(f); }} style={{ display: 'none' }} />
                                 <div style={{ padding: '14px 16px', borderRadius: 12, border: `2px dashed ${audioFile ? '#FF5C2B' : 'rgba(255,255,255,0.08)'}`, background: audioFile ? 'rgba(255,92,43,0.05)' : '#1a1a1a', display: 'flex', alignItems: 'center', gap: 12, transition: 'all 0.2s' }}>
                                     <div style={{ width: 40, height: 40, borderRadius: 10, background: audioFile ? 'rgba(255,92,43,0.15)' : 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 20 }}>
                                         {audioFile ? '✅' : '🎙️'}
                                     </div>
-                                    <div>
+                                    <div style={{ flex: 1 }}>
                                         {audioFile ? (
                                             <>
                                                 <div style={{ fontSize: 13, fontWeight: 600, color: '#FF5C2B' }}>{audioFile.name.length > 30 ? audioFile.name.slice(0, 30) + '…' : audioFile.name}</div>
-                                                <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>{(audioFile.size / 1024 / 1024).toFixed(1)}MB — click to change</div>
+                                                <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>
+                                                    {(audioFile.size / 1024 / 1024).toFixed(1)}MB
+                                                    {audioDuration > 0 && (
+                                                        <span style={{ marginLeft: 6, color: audioDuration <= 15 ? '#4c4' : '#f66', fontWeight: 600 }}>
+                                                            · {audioDuration.toFixed(1)}s {audioDuration <= 15 ? '✅' : '❌ too long!'}
+                                                        </span>
+                                                    )}
+                                                    {' '}— click to change
+                                                </div>
                                             </>
                                         ) : (
                                             <>
                                                 <div style={{ fontSize: 13, fontWeight: 600, color: '#555' }}>Click to upload audio</div>
-                                                <div style={{ fontSize: 11, color: '#333', marginTop: 2 }}>The voice your avatar will speak</div>
+                                                <div style={{ fontSize: 11, color: '#333', marginTop: 2 }}>Max 15 seconds — the voice your avatar will speak</div>
                                             </>
                                         )}
                                     </div>
@@ -205,7 +259,11 @@ function LipSyncContent() {
                             </div>
                         </div>
 
-                        {error && <div style={{ background: 'rgba(255,68,68,0.08)', border: '1px solid rgba(255,68,68,0.2)', borderRadius: 14, padding: '12px 16px', color: '#ff6666', fontSize: 13 }}>⚠️ {error}</div>}
+                        {error && (
+                            <div style={{ background: 'rgba(255,68,68,0.08)', border: '1px solid rgba(255,68,68,0.2)', borderRadius: 14, padding: '12px 16px', color: '#ff6666', fontSize: 13 }}>
+                                ⚠️ {error}
+                            </div>
+                        )}
 
                         <button onClick={handleGenerate} disabled={!canGenerate}
                             style={{ width: '100%', padding: '18px', borderRadius: 16, border: 'none', background: canGenerate ? 'linear-gradient(135deg,#FF5C2B,#e04020)' : '#1a1a1a', color: canGenerate ? 'white' : '#333', fontSize: 16, fontWeight: 800, cursor: canGenerate ? 'pointer' : 'not-allowed', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, boxShadow: canGenerate ? '0 8px 30px rgba(255,92,43,0.3)' : 'none', transition: 'all 0.2s' }}>
@@ -272,10 +330,17 @@ function LipSyncContent() {
                                 </div>
                             )}
                         </div>
+
                         {!videoUrl && (
                             <div style={{ marginTop: 16, background: '#0f0f0f', borderRadius: 16, border: '1px solid rgba(255,255,255,0.04)', padding: '16px 18px' }}>
                                 <div style={{ fontSize: 11, color: '#333', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>💡 Tips for best results</div>
-                                {['Use a clear front-facing photo', 'Good lighting on the face works best', 'Clean audio with no background noise', 'Shorter audio (under 30s) is faster', 'Pro model gives more realistic sync'].map((tip, i) => (
+                                {[
+                                    'Use a clear front-facing photo',
+                                    'Good lighting on the face works best',
+                                    'Clean audio with no background noise',
+                                    'Audio must be under 15 seconds ⚠️',
+                                    'Pro model gives more realistic sync',
+                                ].map((tip, i) => (
                                     <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 7, fontSize: 12, color: '#444' }}>
                                         <span style={{ color: '#FF5C2B', flexShrink: 0 }}>✦</span>{tip}
                                     </div>
