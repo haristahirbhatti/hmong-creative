@@ -5,31 +5,26 @@ export async function POST(req: NextRequest) {
   try {
     const { prompt, lyrics, style, instrumental, userId, userEmail, title } = await req.json();
 
-    const apiKey = process.env.KIE_API_KEY;
-    if (!apiKey) return NextResponse.json({ error: 'KIE_API_KEY not set' }, { status: 500 });
+    // ✅ Use SUNO_V5_API_KEY for V5 model
+    const apiKey = process.env.SUNO_V5_API_KEY;
+    if (!apiKey) return NextResponse.json({ error: 'SUNO_V5_API_KEY not set' }, { status: 500 });
 
-    // Build kie.ai request
-    // - customMode: true  → use title + style + lyrics (exact lyrics mode)
-    // - customMode: false → just prompt, AI writes its own lyrics
     const kieBody: Record<string, unknown> = {
-      model: 'V4',
+      model: 'V5',
       callBackUrl: 'https://hmong-creative.vercel.app/api/audio-callback',
     };
 
     if (instrumental) {
-      // Instrumental — no lyrics, just style
       kieBody.customMode = false;
       kieBody.instrumental = true;
       kieBody.prompt = `${title || prompt}: ${style || 'cinematic instrumental'}`;
     } else if (lyrics && lyrics.trim().length > 0) {
-      // Custom lyrics mode — AI sings EXACTLY these lyrics
       kieBody.customMode = true;
       kieBody.instrumental = false;
       kieBody.title = title || prompt;
       kieBody.style = style || 'pop';
-      kieBody.prompt = lyrics.trim(); // lyrics go in prompt field for customMode
+      kieBody.prompt = lyrics.trim();
     } else {
-      // Simple mode — AI generates its own lyrics based on prompt
       kieBody.customMode = false;
       kieBody.instrumental = false;
       kieBody.prompt = `${title || prompt}: ${style || 'pop'}`;
@@ -52,7 +47,7 @@ export async function POST(req: NextRequest) {
     const taskId = createData.data?.taskId;
     if (!taskId) return NextResponse.json({ error: 'No taskId returned' }, { status: 500 });
 
-    // Poll /api/v1/generate/record-info (confirmed working endpoint)
+    // Poll for result
     for (let i = 0; i < 40; i++) {
       await new Promise(r => setTimeout(r, 5000));
 
@@ -68,7 +63,6 @@ export async function POST(req: NextRequest) {
       const sunoList: { audioUrl?: string; audio_url?: string; url?: string }[] =
         data?.response?.sunoData || data?.sunoData || [];
 
-      // Helper: extract a valid audio URL from a single suno item
       const getUrl = (item: { audioUrl?: string; audio_url?: string; url?: string }) =>
         item?.audioUrl || item?.audio_url || item?.url || '';
 
@@ -77,8 +71,6 @@ export async function POST(req: NextRequest) {
 
       console.log(`Poll #${i + 1} state:${state} clips_ready:${validClips.length}`);
 
-      // ── Wait for BOTH clips before returning ──────────────────────────────
-      // Return when we have 2 valid clips, OR after poll 28 if we have at least 1
       const bothReady = validClips.length >= 2;
       const partialOk = validClips.length >= 1 && i >= 28;
 
@@ -101,16 +93,23 @@ export async function POST(req: NextRequest) {
             await supabase.from('profiles').update({ audio_generated: (profile?.audio_generated || 0) + 1 }).eq('id', userId);
           } catch (dbErr) { console.error('DB save error:', dbErr); }
         }
-        // Return both clips + taskId + per-clip audioId for downstream features
+
         const enrichedClips = validClips.map(c => ({
           ...c,
-          audioId: (c as Record<string, unknown>).id as string || (c as Record<string, unknown>).audioId as string || '',
+          audioId: (c as Record<string, unknown>).id as string ||
+            (c as Record<string, unknown>).audioId as string || '',
         }));
+
         return NextResponse.json({ audioUrl: firstUrl, clips: enrichedClips, taskId });
       }
 
-      if (state === 'FAILED' || state === 'ERROR' || state === 'fail' || state === 'error') {
+      if (state === 'FAILED' || state === 'ERROR' || state === 'fail' || state === 'error' ||
+        state === 'GENERATE_AUDIO_FAILED' || state === 'CREATE_TASK_FAILED') {
         return NextResponse.json({ error: 'Suno generation failed' }, { status: 500 });
+      }
+
+      if (state === 'SENSITIVE_WORD_ERROR') {
+        return NextResponse.json({ error: 'Content filtered by Suno. Please modify your lyrics or prompt and try again.' }, { status: 422 });
       }
     }
 
