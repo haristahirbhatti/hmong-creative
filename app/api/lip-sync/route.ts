@@ -5,6 +5,12 @@ export const maxDuration = 300;
 const UPLOAD_BASE = 'https://kieai.redpandaai.co';
 const API_BASE = 'https://api.kie.ai';
 
+// ✅ Vercel body size limits:
+// Raw file: image 2MB + audio 1MB = 3MB
+// After base64 encoding (+33%): ~4MB — stays under Vercel's 4.5MB hard limit
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2MB
+const MAX_AUDIO_BYTES = 1 * 1024 * 1024; // 1MB
+
 export async function POST(req: NextRequest) {
     try {
         let formData: FormData;
@@ -12,7 +18,7 @@ export async function POST(req: NextRequest) {
             formData = await req.formData();
         } catch (e) {
             console.error('FormData error:', e);
-            return NextResponse.json({ error: 'Failed to read uploaded files' }, { status: 400 });
+            return NextResponse.json({ error: 'Files too large — image max 2MB, audio max 1MB' }, { status: 400 });
         }
 
         const imageFile = formData.get('image') as File | null;
@@ -25,9 +31,19 @@ export async function POST(req: NextRequest) {
         if (!imageFile) return NextResponse.json({ error: 'Image file required' }, { status: 400 });
         if (!audioFile) return NextResponse.json({ error: 'Audio file required' }, { status: 400 });
 
+        // ✅ Strict size checks — must pass before base64 encoding
+        if (imageFile.size > MAX_IMAGE_BYTES) {
+            return NextResponse.json({
+                error: `Image is ${(imageFile.size / 1024 / 1024).toFixed(1)}MB — max 2MB allowed. Please compress your image and try again.`
+            }, { status: 400 });
+        }
+        if (audioFile.size > MAX_AUDIO_BYTES) {
+            return NextResponse.json({
+                error: `Audio is ${(audioFile.size / 1024 / 1024).toFixed(1)}MB — max 1MB allowed. Please trim or compress your audio and try again.`
+            }, { status: 400 });
+        }
+
         // ── Step 1: Upload files to kieai.redpandaai.co ───────────────────
-        // ✅ FIX: use res.text() first then JSON.parse — never call res.json() directly
-        // This prevents "Unexpected token" errors when server returns plain text
         const uploadFile = async (file: File, path: string): Promise<string> => {
             const bytes = await file.arrayBuffer();
             const base64 = Buffer.from(bytes).toString('base64');
@@ -51,19 +67,19 @@ export async function POST(req: NextRequest) {
             }
 
             const text = await res.text();
-            let data: any;
+            let data: Record<string, unknown>;
             try {
                 data = JSON.parse(text);
             } catch {
-                console.error(`Upload response not JSON (${path}):`, text.slice(0, 200));
+                console.error(`Upload not JSON (${path}):`, text.slice(0, 200));
                 throw new Error(`Upload failed — server returned: ${text.slice(0, 100)}`);
             }
 
             const url =
-                data?.data?.downloadUrl ||
-                data?.data?.fileUrl ||
-                data?.data?.url ||
-                data?.downloadUrl ||
+                (data?.data as Record<string, unknown>)?.downloadUrl ||
+                (data?.data as Record<string, unknown>)?.fileUrl ||
+                (data?.data as Record<string, unknown>)?.url ||
+                (data as Record<string, unknown>)?.downloadUrl ||
                 '';
             if (!url) throw new Error(`Upload failed: ${JSON.stringify(data).slice(0, 120)}`);
             return url as string;
@@ -105,7 +121,7 @@ export async function POST(req: NextRequest) {
             });
         } catch (e) {
             return NextResponse.json(
-                { error: `Network error creating task: ${e instanceof Error ? e.message : String(e)}` },
+                { error: `Network error: ${e instanceof Error ? e.message : String(e)}` },
                 { status: 500 },
             );
         }
