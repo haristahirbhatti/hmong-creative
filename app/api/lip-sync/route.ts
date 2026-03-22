@@ -5,11 +5,9 @@ export const maxDuration = 300;
 const UPLOAD_BASE = 'https://kieai.redpandaai.co';
 const API_BASE = 'https://api.kie.ai';
 
-// ✅ Vercel body size limits:
-// Raw file: image 2MB + audio 1MB = 3MB
-// After base64 encoding (+33%): ~4MB — stays under Vercel's 4.5MB hard limit
-const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2MB
-const MAX_AUDIO_BYTES = 1 * 1024 * 1024; // 1MB
+// Vercel 4.5MB hard limit — base64 adds ~33% so keep raw files small
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2MB raw → ~2.7MB base64
+const MAX_AUDIO_BYTES = 1 * 1024 * 1024; // 1MB raw → ~1.3MB base64
 
 export async function POST(req: NextRequest) {
     try {
@@ -31,19 +29,19 @@ export async function POST(req: NextRequest) {
         if (!imageFile) return NextResponse.json({ error: 'Image file required' }, { status: 400 });
         if (!audioFile) return NextResponse.json({ error: 'Audio file required' }, { status: 400 });
 
-        // ✅ Strict size checks — must pass before base64 encoding
+        // Strict size checks
         if (imageFile.size > MAX_IMAGE_BYTES) {
             return NextResponse.json({
-                error: `Image is ${(imageFile.size / 1024 / 1024).toFixed(1)}MB — max 2MB allowed. Please compress your image and try again.`
+                error: `Image is ${(imageFile.size / 1024 / 1024).toFixed(1)}MB — max 2MB allowed. Compress at tinypng.com and try again.`
             }, { status: 400 });
         }
         if (audioFile.size > MAX_AUDIO_BYTES) {
             return NextResponse.json({
-                error: `Audio is ${(audioFile.size / 1024 / 1024).toFixed(1)}MB — max 1MB allowed. Please trim or compress your audio and try again.`
+                error: `Audio is ${(audioFile.size / 1024 / 1024).toFixed(1)}MB — max 1MB allowed. Compress at mp3smaller.com and try again.`
             }, { status: 400 });
         }
 
-        // ── Step 1: Upload files to kieai.redpandaai.co ───────────────────
+        // ── Step 1: Upload files ───────────────────────────────────────────
         const uploadFile = async (file: File, path: string): Promise<string> => {
             const bytes = await file.arrayBuffer();
             const base64 = Buffer.from(bytes).toString('base64');
@@ -183,10 +181,33 @@ export async function POST(req: NextRequest) {
             console.log(`Poll #${i + 1} state:${state}`);
 
             if (state === 'fail') {
-                return NextResponse.json(
-                    { error: `Generation failed: ${d.failMsg || d.failCode || 'unknown error'}` },
-                    { status: 500 },
-                );
+                const msg = String(d.failMsg || d.failCode || '').toLowerCase();
+
+                // ✅ Internal/server error — suggest retry
+                if (msg.includes('internal') || msg.includes('server') || msg === '') {
+                    return NextResponse.json({
+                        error: 'Kling AI server error — please wait a few minutes and try again. This is a temporary issue on their end.'
+                    }, { status: 500 });
+                }
+
+                // Credits error
+                if (msg.includes('credit') || msg.includes('balance') || msg.includes('insufficient')) {
+                    return NextResponse.json({
+                        error: 'Insufficient Market credits on kie.ai — please top up at kie.ai/billing and try again.'
+                    }, { status: 402 });
+                }
+
+                // Audio too long
+                if (msg.includes('15') || msg.includes('exceed') || msg.includes('duration')) {
+                    return NextResponse.json({
+                        error: 'Audio too long — Kling AI requires audio under 15 seconds. Please trim and try again.'
+                    }, { status: 400 });
+                }
+
+                // Generic fail
+                return NextResponse.json({
+                    error: `Generation failed: ${d.failMsg || d.failCode || 'unknown error'}`
+                }, { status: 500 });
             }
 
             if (state === 'success') {
