@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
                 uploadUrl,
                 customMode: true,
                 instrumental: false,
-                model: 'V4',
+                model: 'V5',
                 style: cleanStyle,
                 title: 'Cover',
                 prompt: cleanLyrics.slice(0, 3000),
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
                 uploadUrl,
                 customMode: false,
                 instrumental: false,
-                model: 'V4',
+                model: 'V5',
                 prompt,
                 callBackUrl: 'https://hmong-creative.vercel.app/api/cover-callback',
             };
