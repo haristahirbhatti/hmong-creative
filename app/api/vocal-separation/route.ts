@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
         const createRes = await fetch('https://api.kie.ai/api/v1/vocal-removal/generate', {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ audioUrl, model: 'V5', callBackUrl: 'https://hmong-creative.vercel.app/api/vocal-callback' }),
+            body: JSON.stringify({ audioUrl, model: 'V5', callBackUrl: `${req.nextUrl.origin}/api/vocal-callback` }),
         });
         const createData = await createRes.json();
         console.log('Vocal sep create:', JSON.stringify(createData).slice(0, 200));

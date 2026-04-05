@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
 
     const kieBody: Record<string, unknown> = {
       model: 'V5',
-      callBackUrl: 'https://hmong-creative.vercel.app/api/audio-callback',
+      callBackUrl: `${req.nextUrl.origin}/api/audio-callback`,
     };
 
     if (instrumental) {

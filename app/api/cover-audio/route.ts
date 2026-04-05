@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
                 style: cleanStyle,
                 title: 'Cover',
                 prompt: cleanLyrics.slice(0, 3000),
-                callBackUrl: 'https://hmong-creative.vercel.app/api/cover-callback',
+                callBackUrl: `${req.nextUrl.origin}/api/cover-callback`,
             };
             console.log('customMode=true, lyrics lines:', cleanLyrics.split('\n').length, 'lang:', language);
         } else {
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
                 instrumental: false,
                 model: 'V5',
                 prompt,
-                callBackUrl: 'https://hmong-creative.vercel.app/api/cover-callback',
+                callBackUrl: `${req.nextUrl.origin}/api/cover-callback`,
             };
             console.log('customMode=false, prompt:', body.prompt);
         }

@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
         const createRes = await fetch('https://api.kie.ai/api/v1/midi/generate', {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ taskId, callBackUrl: 'https://hmong-creative.vercel.app/api/midi-callback' }),
+            body: JSON.stringify({ taskId, callBackUrl: `${req.nextUrl.origin}/api/midi-callback` }),
         });
         const createData = await createRes.json();
         console.log('MIDI create:', JSON.stringify(createData).slice(0, 200));

@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
                 headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     prompt: kiePrompt,
-                    callBackUrl: 'https://hmong-creative.vercel.app/api/lyrics-callback',
+                    callBackUrl: `${req.nextUrl.origin}/api/lyrics-callback`,
                 }),
                 signal: AbortSignal.timeout(10000),
             });
@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
                     customMode: false,
                     instrumental: false,
                     prompt: fullPrompt,
-                    callBackUrl: 'https://hmong-creative.vercel.app/api/lyrics-callback',
+                    callBackUrl: `${req.nextUrl.origin}/api/lyrics-callback`,
                 }),
                 signal: AbortSignal.timeout(10000),
             });

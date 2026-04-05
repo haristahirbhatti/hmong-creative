@@ -11,13 +11,14 @@ export async function POST(req: NextRequest) {
 
     const kiePrompt = style ? `${prompt}, ${style} style` : prompt;
 
+    const origin = req.nextUrl.origin;
     // ── Model: Nano Banana ──
     if (model === 'nano-banana') {
-      return await generateNanoBanana(kieKey, kiePrompt, aspect_ratio, userId, userEmail, prompt);
+      return await generateNanoBanana(kieKey, kiePrompt, aspect_ratio, userId, userEmail, prompt, origin);
     }
 
     // ── Model: FLUX Kontext (default) ──
-    return await generateFlux(kieKey, kiePrompt, aspect_ratio, userId, userEmail, prompt);
+    return await generateFlux(kieKey, kiePrompt, aspect_ratio, userId, userEmail, prompt, origin);
 
   } catch (e: unknown) {
     console.error('Create image error:', e);
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
 }
 
 // ── FLUX Kontext ──
-async function generateFlux(kieKey: string, prompt: string, aspect_ratio: string, userId: string, userEmail: string, rawPrompt: string) {
+async function generateFlux(kieKey: string, prompt: string, aspect_ratio: string, userId: string, userEmail: string, rawPrompt: string, origin: string) {
   const createRes = await fetch('https://api.kie.ai/api/v1/flux/kontext/generate', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${kieKey}`, 'Content-Type': 'application/json' },
@@ -38,7 +39,7 @@ async function generateFlux(kieKey: string, prompt: string, aspect_ratio: string
       safetyTolerance: 2,
       enableTranslation: true,
       promptUpsampling: false,
-      callBackUrl: 'https://hmong-creative.vercel.app/api/image-callback',
+      callBackUrl: `${origin}/api/image-callback`,
     }),
   });
   const createData = await createRes.json();
@@ -89,19 +90,19 @@ async function generateFlux(kieKey: string, prompt: string, aspect_ratio: string
 }
 
 // ── Nano Banana ──
-async function generateNanoBanana(kieKey: string, prompt: string, aspect_ratio: string, userId: string, userEmail: string, rawPrompt: string) {
+async function generateNanoBanana(kieKey: string, prompt: string, aspect_ratio: string, userId: string, userEmail: string, rawPrompt: string, origin: string) {
   console.log('Nano Banana generate:', prompt.slice(0, 80), 'ratio:', aspect_ratio);
 
   // Try known kie.ai nano banana endpoint patterns
   const NANO_ENDPOINTS = [
     {
       url: 'https://api.kie.ai/api/v1/nano-banana/generate',
-      body: { prompt, aspectRatio: aspect_ratio || '1:1', callBackUrl: 'https://hmong-creative.vercel.app/api/image-callback' },
+      body: { prompt, aspectRatio: aspect_ratio || '1:1', callBackUrl: `${origin}/api/image-callback` },
       poll: 'https://api.kie.ai/api/v1/nano-banana/record-info',
     },
     {
       url: 'https://api.kie.ai/api/v1/nano-banana-2/generate',
-      body: { prompt, aspectRatio: aspect_ratio || '1:1', callBackUrl: 'https://hmong-creative.vercel.app/api/image-callback' },
+      body: { prompt, aspectRatio: aspect_ratio || '1:1', callBackUrl: `${origin}/api/image-callback` },
       poll: 'https://api.kie.ai/api/v1/nano-banana-2/record-info',
     },
     {

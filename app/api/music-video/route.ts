@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
         const apiKey = process.env.KIE_API_KEY;
         if (!apiKey) return NextResponse.json({ error: 'KIE_API_KEY not set' }, { status: 500 });
 
-        const body: Record<string, unknown> = { taskId, callBackUrl: 'https://hmong-creative.vercel.app/api/music-video-callback' };
+        const body: Record<string, unknown> = { taskId, callBackUrl: `${req.nextUrl.origin}/api/music-video-callback` };
         if (audioId) body.audioId = audioId;
 
         const createRes = await fetch('https://api.kie.ai/api/v1/music-video/generate', {

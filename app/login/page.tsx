@@ -19,7 +19,12 @@ function LoginForm() {
   const handleLogin = async () => {
     if (!email || !password) { setError('Please fill all fields'); return; }
     setLoading(true); setError('');
-    const { error: e } = await supabase.auth.signInWithPassword({ email, password });
+    const { error: e } = await supabase.auth.signInWithPassword({ 
+      email, password,
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?redirect=${redirect}`,
+      },
+    });
     if (e) { setError(e.message); setLoading(false); return; }
     router.push(redirect);
   };
