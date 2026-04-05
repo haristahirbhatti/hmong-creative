@@ -10,8 +10,6 @@ export function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       auth: {
-        // Prevent multiple tabs/components fighting over the same lock
-        storageKey: 'hmong-creative-auth',
         flowType: 'pkce',
         detectSessionInUrl: true,
         persistSession: true,
