@@ -13,26 +13,23 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const check = async () => {
       try {
-        const { data: { user }, error } = await supabase.auth.getUser();
+        const { data: { session } } = await supabase.auth.getSession();
 
-        // Invalid/expired refresh token — clear session and redirect to login
-        if (error || !user) {
-          await supabase.auth.signOut();
+        if (!session) {
           router.push('/login?redirect=' + encodeURIComponent(window.location.pathname));
           return;
         }
 
         setAuthed(true);
-      } catch {
-        await supabase.auth.signOut();
+      } catch (err) {
+        console.error('Auth error:', err);
         router.push('/login');
       } finally {
         setChecking(false);
       }
     };
     check();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [router, supabase.auth]);
 
   if (checking) return (
     <div style={{ minHeight: '100vh', background: '#080808', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'DM Sans',sans-serif", color: '#444' }}>

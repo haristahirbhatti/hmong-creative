@@ -35,7 +35,7 @@ function DashboardContent() {
   useEffect(() => {
     const load = async () => {
       const { data: { user: u } } = await supabase.auth.getUser();
-      if (!u) { router.push('/login'); return; }
+      if (!u) return; // AuthGuard handles redirect
       const name = u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0] || 'User';
       setUser({ name, email: u.email || '', id: u.id });
       await loadStats(u.id);

@@ -26,6 +26,7 @@ function LoginForm() {
       },
     });
     if (e) { setError(e.message); setLoading(false); return; }
+    router.refresh();
     router.push(redirect);
   };
 

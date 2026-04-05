@@ -13,7 +13,7 @@ export function createClient() {
         // Prevent multiple tabs/components fighting over the same lock
         storageKey: 'hmong-creative-auth',
         flowType: 'pkce',
-        detectSessionInUrl: false,
+        detectSessionInUrl: true,
         persistSession: true,
         autoRefreshToken: true,
       },
