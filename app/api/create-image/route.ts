@@ -188,8 +188,19 @@ async function saveToDb(userId: string, userEmail: string, prompt: string, image
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
-    await supabase.from('videos').insert({ user_id: userId, email: userEmail, type: 'image', prompt: prompt.slice(0, 200), result_url: imageUrl });
+    // Ensure profile exists to prevent foreign key errors for OAuth users
+    try { await supabase.from('profiles').upsert({ id: userId, email: userEmail || '' }, { onConflict: 'id', ignoreDuplicates: true }); } catch (e) {}
+    
+    // Insert into gen history
+    const { error: insertErr } = await supabase
+      .from('videos')
+      .insert({ user_id: userId, prompt: prompt.slice(0, 200), video_url: imageUrl, type: 'image' });
+    if (insertErr) { console.error('DB insert error (image):', insertErr.message); return; }
+    console.log('✅ Image saved to DB for user:', userId);
+    // Directly increment images_generated (no RPC function needed)
     const { data: profile } = await supabase.from('profiles').select('images_generated').eq('id', userId).single();
-    await supabase.from('profiles').update({ images_generated: (profile?.images_generated || 0) + 1 }).eq('id', userId);
+    const { error: updErr } = await supabase.from('profiles').update({ images_generated: (profile?.images_generated || 0) + 1 }).eq('id', userId);
+    if (updErr) console.error('DB increment error (image):', updErr.message);
+    else console.log('✅ images_generated incremented for user:', userId);
   } catch (e) { console.error('DB error:', e); }
 }

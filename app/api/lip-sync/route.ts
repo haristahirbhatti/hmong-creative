@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
 export const maxDuration = 300;
 
@@ -23,6 +24,7 @@ export async function POST(req: NextRequest) {
         const audioFile = formData.get('audio') as File | null;
         const prompt = (formData.get('prompt') as string) || '';
         const model = (formData.get('model') as string) || 'standard';
+        const userId = (formData.get('userId') as string) || '';
 
         const apiKey = process.env.KIE_API_KEY;
         if (!apiKey) return NextResponse.json({ error: 'KIE_API_KEY not set' }, { status: 500 });
@@ -225,6 +227,27 @@ export async function POST(req: NextRequest) {
 
                 if (videoUrl) {
                     console.log('Done! videoUrl:', (videoUrl as string).slice(0, 80));
+                    // Save to DB
+                    if (userId) {
+                        try {
+                            const supabase = createClient(
+                                process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                                process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+                            );
+                            try { await supabase.from('profiles').upsert({ id: userId }, { onConflict: 'id', ignoreDuplicates: true }); } catch (e) {}
+                            const { error: dbErr } = await supabase.from('videos').insert({
+                                user_id: userId,
+                                prompt: prompt || 'lip sync avatar',
+                                video_url: videoUrl,
+                                type: 'video',
+                            });
+                            if (!dbErr) {
+                                const { data: prof } = await supabase.from('profiles').select('videos_generated').eq('id', userId).single();
+                                await supabase.from('profiles').update({ videos_generated: (prof?.videos_generated || 0) + 1 }).eq('id', userId);
+                                console.log('✅ Lip sync saved & incremented for user:', userId);
+                            } else { console.error('Lip sync DB insert error:', dbErr.message); }
+                        } catch (e) { console.error('Lip sync DB error:', e); }
+                    }
                     return NextResponse.json({ videoUrl });
                 }
             }

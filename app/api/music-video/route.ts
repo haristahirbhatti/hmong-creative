@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
 export async function POST(req: NextRequest) {
     try {
-        const { taskId, audioId } = await req.json();
+        const { taskId, audioId, userId } = await req.json();
         if (!taskId) return NextResponse.json({ error: 'taskId required' }, { status: 400 });
 
         const apiKey = process.env.KIE_API_KEY;
@@ -35,7 +36,30 @@ export async function POST(req: NextRequest) {
             const state = d?.status || d?.state;
             const videoUrl = r?.videoUrl || r?.video_url || r?.url || d?.videoUrl;
 
-            if (videoUrl) return NextResponse.json({ videoUrl });
+            if (videoUrl) {
+                // Save to DB
+                if (userId) {
+                    try {
+                        const supabase = createClient(
+                            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                            process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+                        );
+                        try { await supabase.from('profiles').upsert({ id: userId }, { onConflict: 'id', ignoreDuplicates: true }); } catch (e) {}
+                        const { error: dbErr } = await supabase.from('videos').insert({
+                            user_id: userId,
+                            prompt: 'music video',
+                            video_url: videoUrl,
+                            type: 'video',
+                        });
+                        if (!dbErr) {
+                            const { data: prof } = await supabase.from('profiles').select('videos_generated').eq('id', userId).single();
+                            await supabase.from('profiles').update({ videos_generated: (prof?.videos_generated || 0) + 1 }).eq('id', userId);
+                            console.log('✅ Music video saved & incremented for user:', userId);
+                        } else { console.error('Music video DB insert error:', dbErr.message); }
+                    } catch (e) { console.error('Music video DB error:', e); }
+                }
+                return NextResponse.json({ videoUrl });
+            }
             if (state === 'FAILED' || state === 'fail' || state === 'error') return NextResponse.json({ error: 'Music video generation failed' }, { status: 500 });
         }
         return NextResponse.json({ error: 'Timeout — try again' }, { status: 408 });

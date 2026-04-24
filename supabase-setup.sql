@@ -99,3 +99,19 @@ create or replace function increment_audio(uid uuid)
 returns void as $$
   update profiles set audio_generated = coalesce(audio_generated, 0) + 1 where id = uid;
 $$ language sql security definer;
+
+-- Decrement functions (used when admin deletes a generation)
+create or replace function decrement_videos(uid uuid)
+returns void as $$
+  update profiles set videos_generated = greatest(0, coalesce(videos_generated, 0) - 1) where id = uid;
+$$ language sql security definer;
+
+create or replace function decrement_images(uid uuid)
+returns void as $$
+  update profiles set images_generated = greatest(0, coalesce(images_generated, 0) - 1) where id = uid;
+$$ language sql security definer;
+
+create or replace function decrement_audio(uid uuid)
+returns void as $$
+  update profiles set audio_generated = greatest(0, coalesce(audio_generated, 0) - 1) where id = uid;
+$$ language sql security definer;

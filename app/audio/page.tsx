@@ -22,11 +22,12 @@ type VocalSep = { vocalUrl: string; instrumentalUrl: string; taskId: string };
 type TimestampWord = { word: string; startTime: number; endTime: number };
 
 function SongCard({
-  clip, index, onEdit, onRegenerate,
+  clip, index, onEdit, onRegenerate, userId,
 }: {
   clip: GeneratedClip; index: number;
   onEdit: (clip: GeneratedClip) => void;
   onRegenerate: (clip: GeneratedClip) => void;
+  userId: string;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -71,14 +72,14 @@ function SongCard({
         const r = await fetch('/api/create-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: `Album cover for ${clip.selectedTags.join(', ') || 'pop'} song "${clip.title}", digital art, vibrant`, aspect_ratio: '1:1' }) });
         const d = await r.json(); if (!r.ok) throw new Error(d.error); setCoverUrl(d.imageUrl || '');
       } else if (id === 'vocals') {
-        const r = await fetch('/api/vocal-separation', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ audioUrl: clip.audioUrl }) });
+        const r = await fetch('/api/vocal-separation', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ audioUrl: clip.audioUrl, userId }) });
         const d = await r.json(); if (!r.ok) throw new Error(d.error); setVocalSep({ vocalUrl: d.vocalUrl, instrumentalUrl: d.instrumentalUrl, taskId: d.taskId });
       } else if (id === 'midi') {
         if (!vocalSep) { setFeatError('Run "Split Vocals" first'); setFeatLoading(false); return; }
         const r = await fetch('/api/midi', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ taskId: vocalSep.taskId }) });
         const d = await r.json(); if (!r.ok) throw new Error(d.error); setMidiUrl(d.midiUrl || '');
       } else if (id === 'video') {
-        const r = await fetch('/api/music-video', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ taskId: clip.taskId, audioId: clip.audioId }) });
+        const r = await fetch('/api/music-video', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ taskId: clip.taskId, audioId: clip.audioId, userId }) });
         const d = await r.json(); if (!r.ok) throw new Error(d.error); setMusicVideoUrl(d.videoUrl || '');
       }
     } catch (e: unknown) { setFeatError(e instanceof Error ? e.message : 'Failed'); }
@@ -386,6 +387,7 @@ function AudioContent() {
                       fd.append('style', coverStyle || 'pop');
                       fd.append('language', coverLanguage || '');
                       fd.append('lyrics', coverLyrics || '');
+                      fd.append('userId', userId);
                       const r = await fetch('/api/cover-audio', { method: 'POST', body: fd });
                       const d = await r.json(); if (!r.ok) throw new Error(d.error);
                       const cls = (d.clips || []).map((c: { audioUrl?: string }) => c.audioUrl).filter(Boolean);
@@ -547,6 +549,7 @@ function AudioContent() {
                           fd.append('style', toolCoverStyle || 'pop');
                           fd.append('language', toolCoverLang || '');
                           fd.append('lyrics', toolCoverLyrics || '');
+                          fd.append('userId', userId);
                           const r = await fetch('/api/cover-audio', { method: 'POST', body: fd });
                           const d = await r.json(); if (!r.ok) throw new Error(d.error);
                           const cls = (d.clips || []).map((cl: { audioUrl?: string }) => cl.audioUrl).filter(Boolean);
@@ -588,7 +591,7 @@ function AudioContent() {
               <div style={{ fontFamily: "var(--font-heading,'Syne',system-ui,sans-serif)", fontSize: 15, fontWeight: 800, color: 'white', marginBottom: 4 }}>🎵 Generated Songs</div>
               <div style={{ fontSize: 12, color: '#444' }}>{clips.length} version{clips.length !== 1 ? 's' : ''} ready</div>
             </div>
-            {clips.map((clip, i) => <SongCard key={i} clip={clip} index={i} onEdit={handleEditClip} onRegenerate={handleRegenerateClip} />)}
+            {clips.map((clip, i) => <SongCard key={i} clip={clip} index={i} userId={userId} onEdit={handleEditClip} onRegenerate={handleRegenerateClip} />)}
             <button onClick={() => { setClips([]); setStatus('idle'); }} style={{ marginTop: 8, width: '100%', padding: '10px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)', background: 'transparent', color: '#333', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Clear &amp; Start Fresh</button>
           </aside>
         )}

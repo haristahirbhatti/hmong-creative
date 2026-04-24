@@ -54,27 +54,20 @@ export async function POST(req: NextRequest) {
               process.env.NEXT_PUBLIC_SUPABASE_URL!,
               process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
             );
+            try { await supabase.from('profiles').upsert({ id: userId }, { onConflict: 'id', ignoreDuplicates: true }); } catch (e) {}
 
-            // Insert generation record
-            await supabase.from('videos').insert({
-              user_id:    userId,
-              email:      userEmail,
-              type:       'video',
-              prompt:     prompt || '',
-              result_url: videoUrl,
+            // Insert generation record — use actual DB column names
+            const { error: insertErr } = await supabase.from('videos').insert({
+              user_id:   userId,
+              prompt:    prompt || '',
+              video_url: videoUrl,
+              type:      'video',
             });
-
-            // Get current count then increment
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('videos_generated')
-              .eq('id', userId)
-              .single();
-
-            await supabase
-              .from('profiles')
-              .update({ videos_generated: (profile?.videos_generated || 0) + 1 })
-              .eq('id', userId);
+            if (!insertErr) {
+              const { data: prof } = await supabase.from('profiles').select('videos_generated').eq('id', userId).single();
+              await supabase.from('profiles').update({ videos_generated: (prof?.videos_generated || 0) + 1 }).eq('id', userId);
+              console.log('✅ Video saved & incremented for user:', userId);
+            } else { console.error('Video DB insert error:', insertErr.message); }
 
           } catch (dbErr) {
             console.error('DB save error (non-fatal):', dbErr);

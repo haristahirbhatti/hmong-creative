@@ -23,12 +23,15 @@ function LipSyncContent() {
     const [error, setError] = useState('');
     const [progress, setProgress] = useState(0);
     const [dragOver, setDragOver] = useState(false);
+    const [userId, setUserId] = useState('');
     const router = useRouter();
     const supabase = createClient();
     const audioCheckRef = useRef<HTMLAudioElement>(null);
 
     useEffect(() => {
-        supabase.auth.getUser().then(() => { });
+        supabase.auth.getUser().then(({ data: { user: u } }: { data: { user: { id: string } | null } }) => {
+            if (u) setUserId(u.id);
+        });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -84,6 +87,7 @@ function LipSyncContent() {
             fd.append('audio', audioFile);
             fd.append('prompt', prompt);
             fd.append('model', model);
+            if (userId) fd.append('userId', userId);
             const res = await fetch('/api/lip-sync', { method: 'POST', body: fd });
             clearInterval(interval);
             const text = await res.text();

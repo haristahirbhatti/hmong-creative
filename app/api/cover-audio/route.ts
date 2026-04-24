@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
 export const maxDuration = 300;
 
@@ -19,6 +20,7 @@ export async function POST(req: NextRequest) {
         const style = (formData.get('style') as string) || '';
         const language = (formData.get('language') as string) || '';
         const lyrics = (formData.get('lyrics') as string) || '';
+        const userId = (formData.get('userId') as string) || '';
 
         const apiKey = process.env.KIE_API_KEY;
         if (!apiKey) return NextResponse.json({ error: 'KIE_API_KEY not set' }, { status: 500 });
@@ -187,6 +189,27 @@ export async function POST(req: NextRequest) {
 
                     if (covers.length > 0) {
                         console.log(`Done! ${covers.length} cover(s) ready`);
+                        // Save to DB
+                        if (userId) {
+                            try {
+                                const supabase = createClient(
+                                    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                                    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+                                );
+                                try { await supabase.from('profiles').upsert({ id: userId }, { onConflict: 'id', ignoreDuplicates: true }); } catch (e) {}
+                                const { error: dbErr } = await supabase.from('videos').insert({
+                                    user_id: userId,
+                                    prompt: style || 'cover audio',
+                                    video_url: covers[0].audioUrl,
+                                    type: 'audio',
+                                });
+                                if (!dbErr) {
+                                    const { data: prof } = await supabase.from('profiles').select('audio_generated').eq('id', userId).single();
+                                    await supabase.from('profiles').update({ audio_generated: (prof?.audio_generated || 0) + 1 }).eq('id', userId);
+                                    console.log('✅ Cover audio saved & incremented for user:', userId);
+                                } else { console.error('Cover audio DB insert error:', dbErr.message); }
+                            } catch (e) { console.error('Cover audio DB error:', e); }
+                        }
                         return NextResponse.json({ audioUrl: covers[0].audioUrl, clips: covers });
                     }
                 }

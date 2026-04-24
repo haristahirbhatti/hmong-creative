@@ -82,15 +82,18 @@ export async function POST(req: NextRequest) {
               process.env.NEXT_PUBLIC_SUPABASE_URL!,
               process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
             );
-            await supabase.from('videos').insert({
+            try { await supabase.from('profiles').upsert({ id: userId }, { onConflict: 'id', ignoreDuplicates: true }); } catch (e) {}
+            const { error: insertErr } = await supabase.from('videos').insert({
               user_id: userId,
-              email: userEmail,
-              type: 'audio',
               prompt: title || String(prompt).slice(0, 100),
-              result_url: firstUrl,
+              video_url: firstUrl,
+              type: 'audio',
             });
-            const { data: profile } = await supabase.from('profiles').select('audio_generated').eq('id', userId).single();
-            await supabase.from('profiles').update({ audio_generated: (profile?.audio_generated || 0) + 1 }).eq('id', userId);
+            if (!insertErr) {
+              const { data: prof } = await supabase.from('profiles').select('audio_generated').eq('id', userId).single();
+              await supabase.from('profiles').update({ audio_generated: (prof?.audio_generated || 0) + 1 }).eq('id', userId);
+              console.log('✅ Audio saved & incremented for user:', userId);
+            } else { console.error('Audio DB insert error:', insertErr.message); }
           } catch (dbErr) { console.error('DB save error:', dbErr); }
         }
 

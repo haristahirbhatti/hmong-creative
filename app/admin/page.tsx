@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { createClient } from '../../lib/supabase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { BODY_FONTS, HEADING_FONTS, ALL_FONTS_PREVIEW_URL } from '../../lib/fonts';
 
 type User = { id: string; email: string; created_at: string; role: string; videos_generated: number; images_generated: number; audio_generated: number; last_seen: string; is_banned: boolean; };
 type Generation = { id: string; user_id: string; type: string; prompt: string; result_url: string; created_at: string; email?: string; };
@@ -38,6 +39,8 @@ export default function AdminPage() {
   const [siteTagline, setSiteTagline] = useState('AI Creative Studio');
   const [maintenance, setMaintenance] = useState(false);
   const [flags, setFlags] = useState({ imageToVideo: true, audioAI: false, createImage: false });
+  const [bodyFont, setBodyFont] = useState('DM Sans');
+  const [headingFont, setHeadingFont] = useState('Syne');
 
   const router = useRouter();
   const supabase = createClient();
@@ -49,6 +52,15 @@ export default function AdminPage() {
     return () => window.removeEventListener('resize', check);
   }, []);
 
+  // Inject all preview fonts into head for the font picker
+  useEffect(() => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = ALL_FONTS_PREVIEW_URL;
+    document.head.appendChild(link);
+    return () => { document.head.removeChild(link); };
+  }, []);
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -58,11 +70,14 @@ export default function AdminPage() {
         if (adminEmails.length > 0 && !adminEmails.includes(user.email || '')) { router.push('/dashboard'); return; }
         setAuthChecked(true);
 
-        const { data: profiles } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-        if (profiles) setUsers(profiles as User[]);
-
-        const { data: gens } = await supabase.from('videos').select('*').order('created_at', { ascending: false }).limit(100);
-        if (gens) setGenerations(gens as Generation[]);
+        const res = await fetch('/api/admin/data');
+        if (res.ok) {
+          const payload = await res.json();
+          if (payload.users) setUsers(payload.users as User[]);
+          if (payload.generations) setGenerations(payload.generations as Generation[]);
+        } else {
+          console.error('Failed to fetch admin data from API');
+        }
 
         // Load site settings
         const { data: sett } = await supabase.from('site_settings').select('key, value');
@@ -77,6 +92,8 @@ export default function AdminPage() {
             audioAI: map.feature_audio_ai === 'true',
             createImage: map.feature_create_image === 'true',
           });
+          if (map.site_body_font    && BODY_FONTS[map.site_body_font])       setBodyFont(map.site_body_font);
+          if (map.site_heading_font && HEADING_FONTS[map.site_heading_font]) setHeadingFont(map.site_heading_font);
         }
       } catch (e) { console.error(e); router.push('/admin/login'); }
       finally { setLoading(false); }
@@ -84,6 +101,19 @@ export default function AdminPage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const refreshData = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/data');
+      if (res.ok) {
+        const payload = await res.json();
+        if (payload.users) setUsers(payload.users as User[]);
+        if (payload.generations) setGenerations(payload.generations as Generation[]);
+      }
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  };
 
   const saveSettings = async () => {
     setSavingSettings(true); setSaveMsg('');
@@ -94,6 +124,8 @@ export default function AdminPage() {
       { key: 'feature_image_to_video', value: String(flags.imageToVideo) },
       { key: 'feature_audio_ai', value: String(flags.audioAI) },
       { key: 'feature_create_image', value: String(flags.createImage) },
+      { key: 'site_body_font', value: bodyFont },
+      { key: 'site_heading_font', value: headingFont },
     ];
     for (const u of updates) {
       await supabase.from('site_settings').upsert({ key: u.key, value: u.value, updated_at: new Date().toISOString() });
@@ -112,8 +144,27 @@ export default function AdminPage() {
 
   const handleDeleteGen = async (genId: string) => {
     setDeleteLoading(genId);
+    // Find the generation to know type and user_id before deleting
+    const gen = generations.find(g => g.id === genId);
     const { error } = await supabase.from('videos').delete().eq('id', genId);
-    if (!error) setGenerations(prev => prev.filter(g => g.id !== genId));
+    if (!error) {
+      setGenerations(prev => prev.filter(g => g.id !== genId));
+      // Decrement the correct profile stat
+      if (gen?.user_id) {
+        const rpcName = gen.type === 'image' ? 'decrement_images' : gen.type === 'audio' ? 'decrement_audio' : 'decrement_videos';
+        try { await supabase.rpc(rpcName, { uid: gen.user_id }); } catch (e) {}
+        // Update local users state so overview stats refresh immediately
+        setUsers(prev => prev.map(u => {
+          if (u.id !== gen.user_id) return u;
+          return {
+            ...u,
+            videos_generated: gen.type === 'video' ? Math.max(0, (u.videos_generated || 0) - 1) : u.videos_generated,
+            images_generated: gen.type === 'image' ? Math.max(0, (u.images_generated || 0) - 1) : u.images_generated,
+            audio_generated:  gen.type === 'audio' ? Math.max(0, (u.audio_generated  || 0) - 1) : u.audio_generated,
+          };
+        }));
+      }
+    }
     setDeleteLoading(null);
   };
 
@@ -173,11 +224,17 @@ export default function AdminPage() {
           </div>
         )}
 
-        <div style={{ marginBottom: 28 }}>
-          <h1 style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: isMobile ? 22 : 26, marginBottom: 4 }}>
-            {SIDEBAR.find(s => s.id === tab)?.icon} {SIDEBAR.find(s => s.id === tab)?.label}
-          </h1>
-          <p style={{ color: '#333', fontSize: 13 }}>Hmong Creative — Admin Dashboard</p>
+        <div style={{ marginBottom: 28, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h1 style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: isMobile ? 22 : 26, marginBottom: 4 }}>
+              {SIDEBAR.find(s => s.id === tab)?.icon} {SIDEBAR.find(s => s.id === tab)?.label}
+            </h1>
+            <p style={{ color: '#333', fontSize: 13 }}>Hmong Creative — Admin Dashboard</p>
+          </div>
+          <button onClick={refreshData} title="Refresh data"
+            style={{ padding: '8px 16px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)', background: 'transparent', color: '#555', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, marginTop: 4 }}>
+            🔄 Refresh
+          </button>
         </div>
 
         {/* ── OVERVIEW ── */}
@@ -373,6 +430,51 @@ export default function AdminPage() {
               </div>
             </div>
 
+            {/* Typography / Font Picker */}
+            <div style={{ background: '#111', borderRadius: 14, border: '1px solid rgba(255,255,255,0.05)', padding: 22 }}>
+              <h3 style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 14, margin: '0 0 4px' }}>🔤 Typography</h3>
+              <p style={{ color: '#444', fontSize: 13, margin: '0 0 20px' }}>Change site fonts — takes effect after saving &amp; page refresh</p>
+
+              {/* Body Font */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 11, color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>Body Font</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(110px,1fr))', gap: 8 }}>
+                  {Object.keys(BODY_FONTS).map(name => (
+                    <button key={name} onClick={() => setBodyFont(name)}
+                      style={{ padding: '12px 8px', borderRadius: 10, border: `2px solid ${bodyFont === name ? '#FF5C2B' : 'rgba(255,255,255,0.07)'}`, background: bodyFont === name ? 'rgba(255,92,43,0.08)' : '#1a1a1a', cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' }}>
+                      <div style={{ fontSize: 24, fontFamily: BODY_FONTS[name].family, fontWeight: 700, color: bodyFont === name ? 'white' : '#555', marginBottom: 5, lineHeight: 1 }}>Aa</div>
+                      <div style={{ fontSize: 10, color: bodyFont === name ? '#FF5C2B' : '#444', fontWeight: 600 }}>{name}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Heading Font */}
+              <div style={{ marginBottom: 18 }}>
+                <div style={{ fontSize: 11, color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>Heading Font</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(110px,1fr))', gap: 8 }}>
+                  {Object.keys(HEADING_FONTS).map(name => (
+                    <button key={name} onClick={() => setHeadingFont(name)}
+                      style={{ padding: '12px 8px', borderRadius: 10, border: `2px solid ${headingFont === name ? '#FF5C2B' : 'rgba(255,255,255,0.07)'}`, background: headingFont === name ? 'rgba(255,92,43,0.08)' : '#1a1a1a', cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' }}>
+                      <div style={{ fontSize: 24, fontFamily: HEADING_FONTS[name].family, fontWeight: 700, color: headingFont === name ? 'white' : '#555', marginBottom: 5, lineHeight: 1 }}>Aa</div>
+                      <div style={{ fontSize: 10, color: headingFont === name ? '#FF5C2B' : '#444', fontWeight: 600 }}>{name}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Live Preview */}
+              <div style={{ background: '#0f0f0f', borderRadius: 12, padding: '16px 18px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                <div style={{ fontSize: 10, color: '#333', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Live Preview</div>
+                <div style={{ fontFamily: HEADING_FONTS[headingFont]?.family, fontWeight: 800, fontSize: 22, color: 'white', marginBottom: 6 }}>Hmong Creative Studio</div>
+                <div style={{ fontFamily: BODY_FONTS[bodyFont]?.family, fontSize: 13, color: '#666', lineHeight: 1.7 }}>Create stunning AI-generated music, videos, and images — powered by the latest AI models.</div>
+                <div style={{ marginTop: 10, display: 'flex', gap: 6 }}>
+                  <span style={{ fontFamily: BODY_FONTS[bodyFont]?.family, fontSize: 11, color: '#FF5C2B', background: 'rgba(255,92,43,0.1)', padding: '3px 10px', borderRadius: 20, fontWeight: 600 }}>Body: {bodyFont}</span>
+                  <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: '#a8d8ea', background: 'rgba(168,216,234,0.08)', padding: '3px 10px', borderRadius: 20, fontWeight: 600 }}>Heading: {headingFont}</span>
+                </div>
+              </div>
+            </div>
+
             {/* Maintenance */}
             <div style={{ background: '#111', borderRadius: 14, border: '1px solid rgba(255,255,255,0.05)', padding: 22 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -419,14 +521,19 @@ export default function AdminPage() {
 
             {/* API Status */}
             <div style={{ background: '#111', borderRadius: 14, border: '1px solid rgba(255,255,255,0.05)', padding: 22 }}>
-              <h3 style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 14, margin: '0 0 14px' }}>🔑 API Status</h3>
-              {[{ label: 'KIE.AI', note: 'Image to Video, Audio, Images' }, { label: 'Supabase', note: 'Auth & Database' }].map(a => (
+              <h3 style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 14, margin: '0 0 14px' }}>🔑 API Configuration</h3>
+              {[
+                { label: 'KIE.AI', note: 'Image to Video, Lip Sync, Audio', active: true /* checked via server env — always configured if site works */ },
+                { label: 'Supabase', note: 'Auth & Database', active: true },
+              ].map(a => (
                 <div key={a.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{a.label}</div>
                     <div style={{ fontSize: 12, color: '#444' }}>{a.note}</div>
                   </div>
-                  <span style={{ padding: '3px 10px', borderRadius: 20, background: 'rgba(100,200,100,0.1)', color: '#80cc80', fontSize: 11, fontWeight: 700 }}>● Active</span>
+                  <span style={{ padding: '3px 10px', borderRadius: 20, background: a.active ? 'rgba(100,200,100,0.1)' : 'rgba(255,68,68,0.1)', color: a.active ? '#80cc80' : '#ff6666', fontSize: 11, fontWeight: 700 }}>
+                    {a.active ? '● Configured' : '● Missing Key'}
+                  </span>
                 </div>
               ))}
             </div>

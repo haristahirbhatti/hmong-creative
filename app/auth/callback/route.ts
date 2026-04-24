@@ -23,7 +23,10 @@ export async function GET(request: NextRequest) {
         },
       }
     );
-    await supabase.auth.exchangeCodeForSession(code);
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) {
+      return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent('Link expired or invalid. Please try again.')}`);
+    }
   }
 
   return NextResponse.redirect(`${origin}${redirect}`);

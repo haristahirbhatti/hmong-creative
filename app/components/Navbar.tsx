@@ -93,6 +93,7 @@ export default function Navbar() {
 
   const FEATURES = [
     { icon: '🎬', label: 'Image to Video', desc: 'Animate your images with AI', href: '/image-to-video', enabled: settings.feature_image_to_video, badge: 'New' },
+    { icon: '🎭', label: 'Lip Sync Avatar', desc: 'Photo + audio = talking avatar', href: '/lip-sync', enabled: true, badge: 'New' },
     { icon: '🎵', label: 'Audio AI', desc: 'Generate music & voiceovers', href: '/audio', enabled: settings.feature_audio_ai, badge: settings.feature_audio_ai ? 'New' : 'Soon' },
     { icon: '🖼️', label: 'Create Image', desc: 'Text to image generation', href: '/create-image', enabled: settings.feature_create_image, badge: settings.feature_create_image ? 'New' : 'Soon' },
   ];

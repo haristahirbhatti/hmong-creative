@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
 export async function POST(req: NextRequest) {
     try {
-        const { audioUrl } = await req.json();
+        const { audioUrl, userId } = await req.json();
         if (!audioUrl) return NextResponse.json({ error: 'audioUrl required' }, { status: 400 });
 
         const apiKey = process.env.KIE_API_KEY;
@@ -33,7 +34,26 @@ export async function POST(req: NextRequest) {
             const vocalUrl = r?.vocalUrl || r?.vocal_url || r?.vocals || d?.vocalUrl;
             const instrumentalUrl = r?.instrumentalUrl || r?.instrumental_url || r?.bgmUrl || d?.instrumentalUrl;
 
-            if (vocalUrl && instrumentalUrl) return NextResponse.json({ vocalUrl, instrumentalUrl, taskId });
+            if (vocalUrl && instrumentalUrl) {
+                // Save to DB
+                if (userId) {
+                    try {
+                        const supabase = createClient(
+                            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                            process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+                        );
+                        const { error: dbErr } = await supabase.from('videos').insert({
+                            user_id: userId,
+                            prompt: 'vocal separation',
+                            video_url: vocalUrl,
+                            type: 'audio',
+                        });
+                        if (dbErr) console.error('Vocal sep DB insert error:', dbErr.message);
+                        else console.log('✅ Vocal separation saved to DB for user:', userId);
+                    } catch (e) { console.error('Vocal sep DB error:', e); }
+                }
+                return NextResponse.json({ vocalUrl, instrumentalUrl, taskId });
+            }
             if (state === 'FAILED' || state === 'fail' || state === 'error') return NextResponse.json({ error: 'Vocal separation failed' }, { status: 500 });
         }
         return NextResponse.json({ error: 'Timeout — try again' }, { status: 408 });
